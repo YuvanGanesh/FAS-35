@@ -1076,9 +1076,10 @@ export default function SalesOrders() {
   const [manualInstructions, setManualInstructions] = useState('');
   const [manualItems, setManualItems] = useState<ManualOrderItem[]>([]);
 
-  const [manualCgstPercent, setManualCgstPercent] = useState<number>();
-  const [manualSgstPercent, setManualSgstPercent] = useState<number>();
-  const [manualTransportChargePercent, setManualTransportChargePercent] = useState<number>();
+  const [manualCgstPercent, setManualCgstPercent] = useState<number | undefined>(undefined);
+  const [manualSgstPercent, setManualSgstPercent] = useState<number | undefined>(undefined);
+  const [manualIgstPercent, setManualIgstPercent] = useState<number | undefined>(undefined);
+  const [manualTransportChargePercent, setManualTransportChargePercent] = useState<number>(0);
 
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [tempJobStatus, setTempJobStatus] = useState<ProductionJobStatus>('notstarted');
@@ -1098,6 +1099,22 @@ export default function SalesOrders() {
   useEffect(() => {
     loadAllData();
   }, []);
+
+  // Auto-populate GST fields when customer is selected
+  useEffect(() => {
+    if (!manualCustomerId) {
+      setManualCgstPercent(undefined);
+      setManualSgstPercent(undefined);
+      setManualIgstPercent(undefined);
+      return;
+    }
+    const customer = customers.find((c: any) => c.id === manualCustomerId);
+    if (customer) {
+      setManualCgstPercent(customer.cgst ? Number(customer.cgst) : undefined);
+      setManualSgstPercent(customer.sgst ? Number(customer.sgst) : undefined);
+      setManualIgstPercent(customer.igst ? Number(customer.igst) : undefined);
+    }
+  }, [manualCustomerId, customers]);
 
   useEffect(() => {
     let filtered = orders;
@@ -1355,11 +1372,15 @@ export default function SalesOrders() {
 
   const calculateManualOrderTotals = () => {
     const subtotal = manualItems.reduce((sum, item) => sum + item.amount, 0);
-    const cgst = manualCurrency === 'INR' ? subtotal * (manualCgstPercent / 100) : 0;
-    const sgst = manualCurrency === 'INR' ? subtotal * (manualSgstPercent / 100) : 0;
-    const transportCharge = subtotal * (manualTransportChargePercent / 100);
-    const grandTotal = subtotal + cgst + sgst + transportCharge;
-    return { subtotal, cgst, sgst, transportCharge, grandTotal };
+    const cgst = (manualCurrency === 'INR' && manualCgstPercent !== undefined)
+      ? subtotal * (manualCgstPercent / 100) : 0;
+    const sgst = (manualCurrency === 'INR' && manualSgstPercent !== undefined)
+      ? subtotal * (manualSgstPercent / 100) : 0;
+    const igst = (manualCurrency === 'INR' && manualIgstPercent !== undefined)
+      ? subtotal * (manualIgstPercent / 100) : 0;
+    const transportCharge = subtotal * ((manualTransportChargePercent || 0) / 100);
+    const grandTotal = subtotal + cgst + sgst + igst + transportCharge;
+    return { subtotal, cgst, sgst, igst, transportCharge, grandTotal };
   };
 
   const handleCreateOrder = async () => {
@@ -1570,8 +1591,9 @@ export default function SalesOrders() {
     setManualDeliveryDate('');
     setManualInstructions('');
     setManualItems([]);
-    setManualCgstPercent(9);
-    setManualSgstPercent(9);
+    setManualCgstPercent(undefined);
+    setManualSgstPercent(undefined);
+    setManualIgstPercent(undefined);
     setManualTransportChargePercent(0);
   };
 
@@ -1998,27 +2020,83 @@ export default function SalesOrders() {
                     <Input type="date" value={manualDeliveryDate} onChange={(e) => setManualDeliveryDate(e.target.value)} />
                   </div>
 
-                  {manualCurrency === 'INR' && (
-                    <Card className="bg-yellow-50 border-yellow-200">
-                      <CardHeader><CardTitle className="text-lg">Tax Configuration (GST)</CardTitle></CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label>CGST %</Label>
-                            <Input type="number" min={0} max={50} step={0.1} value={manualCgstPercent} onChange={(e) => setManualCgstPercent(Number(e.target.value))} />
+                  {manualCurrency === 'INR' &&
+                    (manualCgstPercent !== undefined || manualSgstPercent !== undefined || manualIgstPercent !== undefined) && (
+                      <Card className="bg-yellow-50 border-yellow-200">
+                        <CardHeader>
+                          <CardTitle className="text-lg">Tax Configuration (GST)</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 gap-4">
+                            {/* Show CGST only if customer has CGST set */}
+                            {manualCgstPercent !== undefined && (
+                              <div>
+                                <Label>CGST %</Label>
+                                <Input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={manualCgstPercent}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                      setManualCgstPercent(val === '' ? undefined : Number(val));
+                                    }
+                                  }}
+                                />
+                              </div>
+                            )}
+                            {/* Show SGST only if customer has SGST set */}
+                            {manualSgstPercent !== undefined && (
+                              <div>
+                                <Label>SGST %</Label>
+                                <Input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={manualSgstPercent}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                      setManualSgstPercent(val === '' ? undefined : Number(val));
+                                    }
+                                  }}
+                                />
+                              </div>
+                            )}
+                            {/* Show IGST only if customer has IGST set */}
+                            {manualIgstPercent !== undefined && (
+                              <div>
+                                <Label>IGST %</Label>
+                                <Input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={manualIgstPercent}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                      setManualIgstPercent(val === '' ? undefined : Number(val));
+                                    }
+                                  }}  
+                                />
+                              </div>
+                            )}
                           </div>
-                          <div>
-                            <Label>SGST %</Label>
-                            <Input type="number" min={0} max={50} step={0.1} value={manualSgstPercent} onChange={(e) => setManualSgstPercent(Number(e.target.value))} />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
+                        </CardContent>
+                      </Card>
+                    )}
 
                   <div>
                     <Label>Transport Charge %</Label>
-                    <Input type="number" min={0} step={0.1} value={manualTransportChargePercent} onChange={(e) => setManualTransportChargePercent(Number(e.target.value))} />
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={manualTransportChargePercent}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                          setManualTransportChargePercent(val === '' ? undefined : Number(val));
+                        }
+                      }}
+                    />
                   </div>
 
                   <div className="space-y-4">

@@ -685,7 +685,7 @@ export default function CustomerForm() {
                           setFormData({ ...formData, cgst: val });
                         }
                       }}
-                      placeholder="9"
+                      placeholder="0"
                       className="pr-10"
                     />
                     <Percent className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -695,7 +695,7 @@ export default function CustomerForm() {
                 <div className="space-y-2">
                   <Label>SGST Rate (%)</Label>
                   <div className="relative">
-                    <Input
+                    <Input  
                       type="text"
                       value={formData.sgst || ''}
                       onChange={(e) => {
@@ -704,7 +704,7 @@ export default function CustomerForm() {
                           setFormData({ ...formData, sgst: val });
                         }
                       }}
-                      placeholder="9"
+                      placeholder="0"
                       className="pr-10"
                     />
                     <Percent className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -723,7 +723,7 @@ export default function CustomerForm() {
                           setFormData({ ...formData, igst: val });
                         }
                       }}
-                      placeholder="18"
+                      placeholder="0"
                       className="pr-10"
                     />
                     <Percent className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
