@@ -856,7 +856,7 @@ const saveEdit = async (date: string) => {
                   ₹{sundayOtAmount}
                 </div>
                 <div className="text-xs md:text-sm text-gray-500">
-                  {formatHoursToHMM(monthlySummary.sundayOtHours)} hrs
+                  Total hours : {formatHoursToHMM(monthlySummary.sundayOtHours)}
                 </div>
               </div>
             )}

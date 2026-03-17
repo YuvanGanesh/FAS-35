@@ -521,7 +521,7 @@ export default function PayrollPreparation() {
     if (emp.department === 'Staff' || emp.department?.toLowerCase() === 'staff') {
       sundayAllowance = row.sundaysWorked * 500;
     } else {
-      const hourlyRate = (perDayRate / 8); 
+      const hourlyRate = (perDayRate / 8) * 1.5; 
       sundayAllowance = Number((((row.sundayOtMinutes || 0) / 60) * hourlyRate).toFixed(2));
     }
 

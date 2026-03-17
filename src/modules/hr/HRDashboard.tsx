@@ -21,7 +21,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getAllRecords } from '@/services/firebase';
 import { database } from '@/services/firebase';
-import { ref, onValue, set } from 'firebase/database';
+import { ref, onValue } from 'firebase/database';
+import { TodoManager } from '@/components/todo/TodoManager';
 
 interface TodoItem {
   id: string;
@@ -72,69 +73,11 @@ export default function HRDashboard() {
     totalWorkers: 0,
   });
 
-  // TODO List State
-  const [todos, setTodos] = useState<TodoItem[]>([]);
-  const [newTodo, setNewTodo] = useState('');
-  const [newTodoDueDate, setNewTodoDueDate] = useState('');
+
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
-
-  // Load TODOs from Firebase
-  useEffect(() => {
-    const todoRef = ref(database, 'todos/hr');
-    const unsubscribe = onValue(todoRef, (snap) => {
-      const data = snap.val();
-      if (data) {
-        const todoList = Object.values(data) as TodoItem[];
-        setTodos(todoList.sort((a, b) => b.createdAt - a.createdAt));
-      } else {
-        setTodos([]);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Save TODOs to Firebase
-  const saveTodos = (updatedTodos: TodoItem[]) => {
-    const todoRef = ref(database, 'todos/hr');
-    const todoObj: Record<string, TodoItem> = {};
-    updatedTodos.forEach(todo => {
-      todoObj[todo.id] = todo;
-    });
-    set(todoRef, todoObj);
-  };
-
-  const addTodo = () => {
-    if (!newTodo.trim()) return;
-    const todo: TodoItem = {
-      id: `todo-${Date.now()}`,
-      text: newTodo.trim(),
-      completed: false,
-      createdAt: Date.now(),
-      dueDate: newTodoDueDate || undefined,
-    };
-    const updated = [todo, ...todos];
-    setTodos(updated);
-    saveTodos(updated);
-    setNewTodo('');
-    setNewTodoDueDate('');
-  };
-
-  const toggleTodo = (id: string) => {
-    const updated = todos.map(t =>
-      t.id === id ? { ...t, completed: !t.completed } : t
-    );
-    setTodos(updated);
-    saveTodos(updated);
-  };
-
-  const deleteTodo = (id: string) => {
-    const updated = todos.filter(t => t.id !== id);
-    setTodos(updated);
-    saveTodos(updated);
-  };
 
   const fetchDashboardData = async () => {
     try {
@@ -181,7 +124,7 @@ export default function HRDashboard() {
         `hr/payrollCredited/${currentMonth}`,
       );
       const payrollCredited: PayrollCreditedMonth =
-        payrollCreditedData || {};
+        (payrollCreditedData || {}) as any;
 
       const totalEmployees = employees.length;
       const activeEmployees = employees.filter(
@@ -340,81 +283,7 @@ export default function HRDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <ListTodo className="h-5 w-5 text-blue-600" />
-              HR TODO List
-            </CardTitle>
-            <span className="text-sm text-muted-foreground">
-              {todos.filter(t => !t.completed).length} pending
-            </span>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Add new TODO */}
-            <div className="flex gap-2">
-              <Input
-                placeholder="Add a new task..."
-                value={newTodo}
-                onChange={(e) => setNewTodo(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addTodo()}
-                className="flex-1"
-              />
-              <Input
-                type="date"
-                value={newTodoDueDate}
-                onChange={(e) => setNewTodoDueDate(e.target.value)}
-                className="w-40"
-              />
-              <Button onClick={addTodo} size="icon">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* TODO Items */}
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {todos.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">No tasks yet. Add one above!</p>
-              ) : (
-                todos.map((todo) => (
-                  <div
-                    key={todo.id}
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                      todo.completed ? 'bg-green-50 border-green-200' : 'bg-white hover:bg-gray-50'
-                    }`}
-                  >
-                    <Checkbox
-                      checked={todo.completed}
-                      onCheckedChange={() => toggleTodo(todo.id)}
-                    />
-                    <div className={`flex-1 ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>
-                      <span>{todo.text}</span>
-                      {todo.dueDate && (
-                        <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                          todo.completed
-                            ? 'bg-green-100 text-green-700'
-                            : new Date(todo.dueDate) < new Date(new Date().toISOString().split('T')[0])
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {new Date(todo.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => deleteTodo(todo.id)}
-                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <TodoManager basePath="todos/hr" title="HR TODO List" />
       </div>
     </div>
   );

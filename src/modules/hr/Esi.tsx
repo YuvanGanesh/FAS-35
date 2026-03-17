@@ -387,7 +387,7 @@ const Esi: React.FC = () => {
           if ((emp as any).department === 'Staff' || (emp as any).department?.toLowerCase() === 'staff') {
             sundayAllowance = sundayWorkedCount * 500;
           } else {
-            const hourlyRate = (perDayRate / 8); 
+            const hourlyRate = (perDayRate / 8) * 1.5; 
             sundayAllowance = (sundayOtMinutesForWorkers / 60) * hourlyRate;
           }
 
