@@ -506,11 +506,8 @@ export default function PayrollPreparation() {
   // CORRECTED recalculateRow FUNCTION - Shows Special Allowance from DB
   // Replace the ENTIRE recalculateRow function with this:
   const recalculateRow = (row: PayrollRow, emp: Employee, totalDays: number): PayrollRow => {
-    // Get DB salary breakdown FIRST
-    const salaryBreakdown = getSalaryBreakdown(emp);
     const monthlySalary = getMonthlySalary(emp);
 
-    // Recalculate perDayRate from current DB value
     const perDayRate = Number((monthlySalary / totalDays).toFixed(2));
 
     const pdPay = Number((row.presentDays * perDayRate).toFixed(2));
@@ -523,7 +520,6 @@ export default function PayrollPreparation() {
 
     const sundayPay = Number((row.sundayCount * perDayRate).toFixed(2));
     
-    // **NEW**: Staff gets flat 500, Workers get hourly base for Sunday work
     let sundayAllowance = 0;
     if (emp.department === 'Staff' || emp.department?.toLowerCase() === 'staff') {
       sundayAllowance = row.sundaysWorked * 500;
@@ -532,42 +528,32 @@ export default function PayrollPreparation() {
       sundayAllowance = Number((((row.sundayOtMinutes || 0) / 60) * hourlyRate).toFixed(2));
     }
 
-    // Calculate base recurring earnings for proration (excluding OT, sunday pay, allowances)
-    const regularEarnings = Number(
-      (pdPay + hdPay).toFixed(2)
-    );
+    // 1) Basic = P.D Pay / 2
+    const basic = Number((pdPay / 2).toFixed(2));
+    
+    // 2) HRA = Basic / 2
+    const hra = Number((basic / 2).toFixed(2));
+    
+    // 3) CA = manual input (already in row.conveyance)
+    const conveyance = row.conveyance;
+    
+    // 4) Other All. = P.D Pay - Basic - HRA - CA
+    const otherAllowance = Number((pdPay - basic - hra - conveyance).toFixed(2));
 
-    let basic = 0;
-    let hra = 0;
-    let conveyance = 0;
-    let otherAllowance = 0;
-    let pf = 0;
-    let esi = 0;
-
-    if (regularEarnings > 0 && monthlySalary > 0) {
-      // Calculate the ratio of earned vs monthly salary (regular days only)
-      const earningRatio = regularEarnings / monthlySalary;
-
-      // Apply DB values proportionally based on attendance
-      basic = Number((salaryBreakdown.basic * earningRatio).toFixed(2));
-      hra = Number((salaryBreakdown.hra * earningRatio).toFixed(2));
-      conveyance = Number((salaryBreakdown.conveyance * earningRatio).toFixed(2));
-      otherAllowance = Number((salaryBreakdown.otherAllowance * earningRatio).toFixed(2));
-    }
-
-    // Total Gross earnings = prorated regular components + all fixed/extra additions
+    // 5) Total Gross = Basic + HRA + CA + Other All. + Special Allowance + OT Amt + Sunday Pay + Sunday Allowance
+    // Special Allowance is manual input (already in row.additionalSpAllowance)
     const totalGrossEarnings = Number((
       basic + hra + conveyance + otherAllowance +
       row.additionalSpAllowance + row.fullMonthBonus +
       otAmount + sundayPay + sundayAllowance
     ).toFixed(2));
 
-    // PF calculation based on prorated Basic + Conveyance only
+    // PF calculation based on Basic + Conveyance
     const pfBase = basic + conveyance;
-    pf = isPFApplicable(emp) ? Number((pfBase * 0.12).toFixed(2)) : 0;
+    const pf = isPFApplicable(emp) ? Number((pfBase * 0.12).toFixed(2)) : 0;
 
     // ESI calculation based on Total Gross
-    esi =
+    const esi =
       isESIApplicable(emp) && monthlySalary <= 21000
         ? Number((totalGrossEarnings * 0.0075).toFixed(2))
         : 0;
@@ -578,8 +564,8 @@ export default function PayrollPreparation() {
 
     return {
       ...row,
-      monthlySalary, // Update this too!
-      perDayRate,    // Update this too!
+      monthlySalary,
+      perDayRate,
       pdPay,
       hdPay,
       ldPay,
@@ -610,6 +596,36 @@ export default function PayrollPreparation() {
           const emp = employees.find((e) => e.employeeId === employeeId);
           if (!emp) return row;
           const updatedRow = { ...row, loanDeduction: numericValue };
+          return recalculateRow(updatedRow, emp, row.totalDays);
+        }
+        return row;
+      })
+    );
+  };
+
+  const handleConveyanceChange = (employeeId: string, newValue: string) => {
+    const numericValue = parseFloat(newValue) || 0;
+    setPayroll((prev) =>
+      prev.map((row) => {
+        if (row.employeeId === employeeId) {
+          const emp = employees.find((e) => e.employeeId === employeeId);
+          if (!emp) return row;
+          const updatedRow = { ...row, conveyance: numericValue };
+          return recalculateRow(updatedRow, emp, row.totalDays);
+        }
+        return row;
+      })
+    );
+  };
+
+  const handleSpecialAllowanceChange = (employeeId: string, newValue: string) => {
+    const numericValue = parseFloat(newValue) || 0;
+    setPayroll((prev) =>
+      prev.map((row) => {
+        if (row.employeeId === employeeId) {
+          const emp = employees.find((e) => e.employeeId === employeeId);
+          if (!emp) return row;
+          const updatedRow = { ...row, additionalSpAllowance: numericValue };
           return recalculateRow(updatedRow, emp, row.totalDays);
         }
         return row;
@@ -1456,10 +1472,30 @@ export default function PayrollPreparation() {
                           <TableCell className="font-bold text-purple-700">
                             ₹{row.sundayPay.toLocaleString('en-IN')}
                           </TableCell>
-                          <TableCell>₹{row.additionalSpAllowance.toLocaleString('en-IN')}</TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Input
+                              type="number"
+                              value={row.additionalSpAllowance === 0 ? '' : row.additionalSpAllowance}
+                              onChange={(e) =>
+                                handleSpecialAllowanceChange(row.employeeId, e.target.value)
+                              }
+                              className="w-20 h-7 text-right font-semibold text-xs"
+                              min={0}
+                            />
+                          </TableCell>
                           <TableCell>₹{row.basic.toLocaleString('en-IN')}</TableCell>
                           <TableCell>₹{row.hra.toLocaleString('en-IN')}</TableCell>
-                          <TableCell>₹{row.conveyance.toLocaleString('en-IN')}</TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Input
+                              type="number"
+                              value={row.conveyance === 0 ? '' : row.conveyance}
+                              onChange={(e) =>
+                                handleConveyanceChange(row.employeeId, e.target.value)
+                              }
+                              className="w-20 h-7 text-right font-semibold text-xs"
+                              min={0}
+                            />
+                          </TableCell>
                           <TableCell>₹{row.otherAllowance.toLocaleString('en-IN')}</TableCell>
                           <TableCell className="font-bold text-emerald-700 bg-emerald-50">
                             ₹{row.totalEarnings.toLocaleString('en-IN')}
@@ -1473,7 +1509,7 @@ export default function PayrollPreparation() {
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <Input
                               type="number"
-                              value={row.loanDeduction}
+                              value={row.loanDeduction === 0 ? '' : row.loanDeduction}
                               onChange={(e) =>
                                 handleLoanDeductionChange(row.employeeId, e.target.value)
                               }

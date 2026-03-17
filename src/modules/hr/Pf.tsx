@@ -328,34 +328,20 @@ const Pf: React.FC = () => {
           // Calculate payable days
           const payableDays = fullWorkingDays + half * 0.5;
 
-          // Calculate earnings
+          // Calculate components
           const monthlySalary = getMonthlySalary(emp);
           const perDayRate = monthlySalary / totalDays;
 
           const pdPay = fullWorkingDays * perDayRate;
           const hdPay = half * (perDayRate / 2);
-          const holidayPay = applicableHolidaysCount * perDayRate;
-          const effectiveSundayCount = sundaysInMonth;
-          const sundayPay = effectiveSundayCount * perDayRate;
 
-          // Total Gross earnings (without OT for now, as OT doesn't affect PF base)
-          const totalGrossEarnings = pdPay + hdPay + sundayPay;
-
-          // Get master salary breakdown
-          const salaryBreakdown = getSalaryBreakdown(emp);
-
-          // Calculate earning ratio
-          let earningRatio = 0;
-          if (totalGrossEarnings > 0 && monthlySalary > 0) {
-            earningRatio = totalGrossEarnings / monthlySalary;
-          }
-
-          // Apply ratio to get attendance-adjusted components
-          const attendanceBasic = Math.round(salaryBreakdown.basic * earningRatio);
-          const attendanceConveyance = Math.round(salaryBreakdown.conveyance * earningRatio);
-
+          // NEW LOGIC: Basic = P.D Pay / 2
+          const basic = pdPay / 2;
+          
           // PF calculation (12% of Basic + Conveyance)
-          const pfBase = attendanceBasic + attendanceConveyance;
+          // Since CA is manual, we use the master value as a fallback for PF calculation
+          const masterConveyance = emp.salary?.conveyance || 0;
+          const pfBase = basic + masterConveyance;
           const pfAmt = isPFApplicable(emp) ? Math.round(pfBase * 0.12) : 0;
 
           pfAmounts[emp.id!] = pfAmt;

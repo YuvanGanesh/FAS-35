@@ -373,7 +373,6 @@ const Esi: React.FC = () => {
 
           const pdPay = fullWorkingDays * perDayRate;
           const hdPay = half * (perDayRate / 2);
-          const holidayPay = applicableHolidaysCount * perDayRate;
           const effectiveSundayCount = sundaysInMonth;
           const sundayPay = effectiveSundayCount * perDayRate;
 
@@ -382,7 +381,7 @@ const Esi: React.FC = () => {
           const dynamicOtRate = (perDayRate / 8) * multiplier;
           const otAmount = (totalOtMinutes / 60) * dynamicOtRate;
 
-          // Split Sunday Allowance logic
+          // Sunday Allowance logic
           let sundayAllowance = 0;
           if ((emp as any).department === 'Staff' || (emp as any).department?.toLowerCase() === 'staff') {
             sundayAllowance = sundayWorkedCount * 500;
@@ -391,8 +390,16 @@ const Esi: React.FC = () => {
             sundayAllowance = (sundayOtMinutesForWorkers / 60) * hourlyRate;
           }
 
+          // Full Month Bonus
+          const fullMonthBonus = present >= adjustedRequiredDays ? 400 : 0;
+
+          // Master Special Allowance
+          const salary = (emp as any).salary || {};
+          const masterSpecialAllowance = salary.additionalSpecialAllowance || 0;
+
           // Total Gross earnings (SAME AS PAYROLL.TSX)
-          const totalGrossEarnings = pdPay + hdPay + sundayPay + otAmount + sundayAllowance;
+          // Total Gross = pdPay + Special Allowance + fullMonthBonus + OT + Sunday Pay + Sunday Allowance
+          const totalGrossEarnings = pdPay + hdPay + sundayPay + otAmount + sundayAllowance + masterSpecialAllowance + fullMonthBonus;
 
           // ESI calculation
           const isEligible = isESIApplicable(emp) && monthlySalary <= ESI_THRESHOLD;
