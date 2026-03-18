@@ -62,6 +62,7 @@ import {
   RotateCcw,
   Calendar,
   Package,
+  Ban,
 } from 'lucide-react';
 import { getAllRecords, createRecord, updateRecord, deleteRecord } from '@/services/firebase';
 
@@ -1035,6 +1036,153 @@ const ProformaInvoicePrintTemplate = ({ order }: { order: SalesOrder }) => {
 // MAIN COMPONENT
 // ────────────────────────────────────────────────
 
+// ── Product Search Combobox ──
+function ProductSearchCombobox({
+  value,
+  products,
+  onChange,
+}: {
+  value: string;
+  products: (ProductItem & { parentId: string })[];
+  onChange: (code: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const selected = products.find((p) => p.productCode === value);
+
+  const filtered = search.trim()
+    ? products.filter((p) => {
+      const q = search.toLowerCase();
+      return (
+        p.productCode?.toLowerCase().includes(q) ||
+        p.category?.toLowerCase().includes(q) ||
+        p.group?.toLowerCase().includes(q) ||
+        p.type?.toLowerCase().includes(q)
+      );
+    })
+    : products;
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+        setSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleSelect = (code: string) => {
+    onChange(code);
+    setOpen(false);
+    setSearch('');
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {/* Trigger button */}
+      <button
+        type="button"
+        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        onClick={() => {
+          setOpen((prev) => !prev);
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }}
+      >
+        <span className={selected ? 'text-foreground' : 'text-muted-foreground'}>
+          {selected
+            ? `${selected.productCode} — ${selected.category} / ${selected.group}`
+            : 'Type to search product...'}
+        </span>
+        <Search className="h-4 w-4 text-muted-foreground shrink-0 ml-2" />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg">
+          {/* Search input */}
+          <div className="flex items-center border-b px-3 py-2 gap-2">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <input
+              ref={inputRef}
+              type="text"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              placeholder="Search by code, category, group, type..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Results list */}
+          <div className="max-h-60 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                No products match "{search}"
+              </div>
+            ) : (
+              filtered.map((p) => (
+                <button
+                  key={p.productCode}
+                  type="button"
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-start gap-2 ${p.productCode === value ? 'bg-accent/60 font-medium' : ''
+                    }`}
+                  onClick={() => handleSelect(p.productCode)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="font-mono font-semibold text-blue-700 text-xs">
+                      {p.productCode}
+                    </span>
+                    <span className="mx-1.5 text-muted-foreground">—</span>
+                    <span>{p.category}</span>
+                    {p.group && (
+                      <>
+                        <span className="mx-1 text-muted-foreground">/</span>
+                        <span className="text-muted-foreground">{p.group}</span>
+                      </>
+                    )}
+                    {p.type && (
+                      <span className="ml-1 text-xs text-muted-foreground">({p.type})</span>
+                    )}
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      Stock: {p.stockQty} {p.unit}
+                    </span>
+                  </div>
+                  {p.productCode === value && (
+                    <CheckCircle className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+
+          {filtered.length > 0 && (
+            <div className="border-t px-3 py-1.5 text-xs text-muted-foreground">
+              {filtered.length} of {products.length} products
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SalesOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<SalesOrder[]>([]);
@@ -1056,6 +1204,9 @@ export default function SalesOrders() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [cancelRemark, setCancelRemark] = useState('');
+  const [cancellingOrder, setCancellingOrder] = useState<SalesOrder | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
   const [selectedQuotationId, setSelectedQuotationId] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
@@ -1246,6 +1397,7 @@ export default function SalesOrders() {
       'Delivered': 'bg-cyan-100 text-cyan-800',
       'Invoice Generated': 'bg-lime-100 text-lime-800',
       'Closed': 'bg-green-100 text-green-800',
+      'Cancelled': 'bg-red-100 text-red-800',
     };
     return map[status] || 'bg-gray-100 text-gray-800';
   };
@@ -1295,6 +1447,12 @@ export default function SalesOrders() {
   const openDelete = (order: SalesOrder) => {
     setSelectedOrder(order);
     setIsDeleteOpen(true);
+  };
+
+  const openCancel = (order: SalesOrder) => {
+    setCancellingOrder(order);
+    setCancelRemark('');
+    setIsCancelOpen(true);
   };
 
   const openPreview = (order: SalesOrder, type: 'oa' | 'proforma') => {
@@ -1527,6 +1685,30 @@ export default function SalesOrders() {
       loadAllData();
     } catch (err) {
       toast.error('Failed to delete order');
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!cancellingOrder) return;
+    if (!cancelRemark.trim()) {
+      toast.error('Please enter a cancellation remark');
+      return;
+    }
+    try {
+      await updateRecord('sales/orderAcknowledgements', cancellingOrder.id, {
+        status: 'Cancelled' as any,
+        cancelledAt: Date.now(),
+        cancelRemark: cancelRemark.trim(),
+        updatedAt: Date.now(),
+      });
+      toast.success(`${cancellingOrder.soNumber} has been cancelled`);
+      setIsCancelOpen(false);
+      setCancellingOrder(null);
+      setCancelRemark('');
+      loadAllData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to cancel order');
     }
   };
 
@@ -2075,7 +2257,7 @@ export default function SalesOrders() {
                                     if (val === '' || /^\d*\.?\d*$/.test(val)) {
                                       setManualIgstPercent(val === '' ? undefined : Number(val));
                                     }
-                                  }}  
+                                  }}
                                 />
                               </div>
                             )}
@@ -2118,16 +2300,11 @@ export default function SalesOrders() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="md:col-span-2">
                             <Label>Select Product</Label>
-                            <Select value={item.productCode} onValueChange={(v) => updateManualItem(item.id, 'productCode', v)}>
-                              <SelectTrigger><SelectValue placeholder="Choose product..." /></SelectTrigger>
-                              <SelectContent>
-                                {flattenedProducts.map((p) => (
-                                  <SelectItem key={p.productCode} value={p.productCode}>
-                                    {p.productCode} - {p.category} - {p.group} ({p.type}) | Stock: {p.stockQty} {p.unit}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <ProductSearchCombobox
+                              value={item.productCode}
+                              products={flattenedProducts}
+                              onChange={(code) => updateManualItem(item.id, 'productCode', code)}
+                            />
                           </div>
 
                           {item.productCode && (
@@ -2361,20 +2538,41 @@ export default function SalesOrders() {
                             </div>
                             <div className="text-xs text-muted-foreground">{order.currency || 'INR'}</div>
                           </TableCell>
+
                           <TableCell className="text-center">
                             <div className="flex justify-center gap-1 items-center flex-wrap">
-                              {canDelete(order) ? (
-                                <>
-                                  <Button size="sm" variant="outline" onClick={() => openEdit(order)}><Edit className="h-4 w-4" /></Button>
-                                  {order.status === 'Pending' && (
-                                    <Button size="sm" onClick={() => handleConfirmOrder(order)}><CheckCircle className="h-4 w-4" /></Button>
-                                  )}
-                                  <Button size="sm" variant="destructive" onClick={() => openDelete(order)}><Trash2 className="h-4 w-4" /></Button>
-                                </>
+                              {order.status === 'Cancelled' ? (
+                                <Badge variant="secondary" className="text-xs bg-red-100 text-red-800">
+                                  <Ban className="h-3 w-3 mr-1" />Cancelled
+                                </Badge>
                               ) : (
-                                <Badge variant="secondary" className="text-xs"><Lock className="h-3 w-3 mr-1" />Locked</Badge>
+                                <>
+                                  {(order.status === 'Pending' || order.status === 'Confirmed') && (
+                                    <Button size="sm" variant="outline" onClick={() => openEdit(order)}>
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {order.status === 'Pending' && (
+                                    <Button size="sm" onClick={() => handleConfirmOrder(order)}>
+                                      <CheckCircle className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-red-400 text-red-600 hover:bg-red-50"
+                                    onClick={() => openCancel(order)}
+                                  >
+                                    <Ban className="h-4 w-4 mr-1" />Cancel
+                                  </Button>
+                                </>
                               )}
-                              <Button size="sm" variant="outline" className="border-green-600 text-green-600 hover:bg-green-50" onClick={() => openPreview(order, 'oa')}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-green-600 text-green-600 hover:bg-green-50"
+                                onClick={() => openPreview(order, 'oa')}
+                              >
                                 <Eye className="h-4 w-4 mr-1" />View
                               </Button>
                             </div>
@@ -2855,19 +3053,38 @@ export default function SalesOrders() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+      {/* Cancel Order Dialog */}
+      <AlertDialog open={isCancelOpen} onOpenChange={setIsCancelOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedOrder?.soNumber}?</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-red-600" />
+              Cancel Order — {cancellingOrder?.soNumber}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the sales order and cannot be undone. All related data will be lost.
+              This will mark the order as <strong>Cancelled</strong>. The record will be preserved for audit. Please enter a reason.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="py-2">
+            <Label>Cancellation Remark <span className="text-red-500">*</span></Label>
+            <Textarea
+              value={cancelRemark}
+              onChange={(e) => setCancelRemark(e.target.value)}
+              placeholder="e.g. Customer requested cancellation, duplicate order, pricing issue..."
+              rows={3}
+              className="mt-1"
+            />
+          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsDeleteOpen(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteOrder} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete Permanently
+            <AlertDialogCancel onClick={() => { setIsCancelOpen(false); setCancelRemark(''); }}>
+              Keep Order
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelOrder}
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={!cancelRemark.trim()}
+            >
+              <Ban className="h-4 w-4 mr-1" />Confirm Cancellation
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -15,13 +15,13 @@ import {
 } from 'firebase/database';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBlYRmC04NUje53nm1Nt9t8Rg9945DlFnA",
-  authDomain: "fluro-92c1c.firebaseapp.com",
-  databaseURL: "https://fluro-92c1c-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "fluro-92c1c",
-  storageBucket: "fluro-92c1c.firebasestorage.app",
-  messagingSenderId: "316975869540",
-  appId: "1:316975869540:web:19247d407fa07b7968b971"
+  apiKey: "AIzaSyDoj44Mkkb2znB-4lpu1v3WjMTilD25SIs",
+  authDomain: "fcs-erp.firebaseapp.com",
+  databaseURL: "https://fcs-erp-default-rtdb.firebaseio.com",
+  projectId: "fcs-erp",
+  storageBucket: "fcs-erp.firebasestorage.app",
+  messagingSenderId: "346374937760",
+  appId: "1:346374937760:web:799e9bfd6c5fc16f4cbdc5"
 };
 
 const app = initializeApp(firebaseConfig);

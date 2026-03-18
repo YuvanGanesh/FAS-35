@@ -9,14 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Download, Edit, Trash2, Plus, X, Copy, Search, Calendar, Filter, Eye } from "lucide-react"
+import { Download, Edit, Trash2, Plus, X, Copy, Search, Calendar, Filter, Eye, Ban } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import html2canvas from "html2canvas"
 import jsPDF from "jspdf"
-import { getAllRecords, deleteRecord } from "@/services/firebase"
+import { getAllRecords, deleteRecord, updateRecord } from "@/services/firebase"
 import CreateInvoice from "./CreateInvoice"
 import fas from "./fas.png"
+import { Textarea } from "@/components/ui/textarea"
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   INR: "₹",
@@ -31,60 +32,60 @@ const FullInvoiceTemplate = ({ invoice }: { invoice: any }) => {
   const currency = invoice.currency || "INR"
   const symbol = CURRENCY_SYMBOLS[currency]
 
-const numberToWords = (num: number): string => {
-  if (currency !== "INR") return "";
+  const numberToWords = (num: number): string => {
+    if (currency !== "INR") return "";
 
-  const units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
-  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+    const units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+    const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
 
-  // Round to 2 decimal places and work with integer part only
-  const integerPart = Math.floor(num);
-  
-  if (integerPart === 0) return "Zero Rupees Only";
+    // Round to 2 decimal places and work with integer part only
+    const integerPart = Math.floor(num);
 
-  let word = "";
+    if (integerPart === 0) return "Zero Rupees Only";
 
-  // Crore (10,000,000)
-  let part = Math.floor(integerPart / 10000000);
-  if (part > 0) {
-    word += numberToWords(part).replace(" Rupees Only", "") + " Crore ";
-    num = integerPart % 10000000;
-  }
+    let word = "";
 
-  // Lakh (100,000)
-  part = Math.floor(integerPart / 100000) % 100;
-  if (part > 0) {
-    word += convertTwoDigit(part) + " Lakh ";
-  }
+    // Crore (10,000,000)
+    let part = Math.floor(integerPart / 10000000);
+    if (part > 0) {
+      word += numberToWords(part).replace(" Rupees Only", "") + " Crore ";
+      num = integerPart % 10000000;
+    }
 
-  // Thousand (1,000)
-  part = Math.floor(integerPart / 1000) % 100;
-  if (part > 0) {
-    word += convertTwoDigit(part) + " Thousand ";
-  }
+    // Lakh (100,000)
+    part = Math.floor(integerPart / 100000) % 100;
+    if (part > 0) {
+      word += convertTwoDigit(part) + " Lakh ";
+    }
 
-  // Hundred (100)
-  part = Math.floor(integerPart / 100) % 10;
-  if (part > 0) {
-    word += units[part] + " Hundred ";
-  }
+    // Thousand (1,000)
+    part = Math.floor(integerPart / 1000) % 100;
+    if (part > 0) {
+      word += convertTwoDigit(part) + " Thousand ";
+    }
 
-  // Remaining two digits
-  part = integerPart % 100;
-  if (part > 0) {
-    word += convertTwoDigit(part) + " ";
-  }
+    // Hundred (100)
+    part = Math.floor(integerPart / 100) % 10;
+    if (part > 0) {
+      word += units[part] + " Hundred ";
+    }
 
-  return word.trim() + " Rupees Only";
+    // Remaining two digits
+    part = integerPart % 100;
+    if (part > 0) {
+      word += convertTwoDigit(part) + " ";
+    }
 
-  // Helper function to convert two-digit numbers
-  function convertTwoDigit(n: number): string {
-    if (n < 10) return units[n];
-    if (n >= 10 && n < 20) return teens[n - 10];
-    return tens[Math.floor(n / 10)] + (n % 10 > 0 ? " " + units[n % 10] : "");
-  }
-};
+    return word.trim() + " Rupees Only";
+
+    // Helper function to convert two-digit numbers
+    function convertTwoDigit(n: number): string {
+      if (n < 10) return units[n];
+      if (n >= 10 && n < 20) return teens[n - 10];
+      return tens[Math.floor(n / 10)] + (n % 10 > 0 ? " " + units[n % 10] : "");
+    }
+  };
 
 
   const formatAmount = (n: number) =>
@@ -1086,6 +1087,64 @@ export default function InvoicesPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null)
   const [selectedDate, setSelectedDate] = useState<string>("")
   const navigate = useNavigate()
+  const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [cancellingInvoice, setCancellingInvoice] = useState<any | null>(null);
+  const [cancelRemark, setCancelRemark] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const openCancelInvoice = (inv: any) => {
+    setCancellingInvoice(inv);
+    setCancelRemark('');
+    setIsCancelOpen(true);
+  };
+
+  const handleCancelInvoice = async () => {
+    if (!cancellingInvoice) return;
+    if (!cancelRemark.trim()) {
+      toast.error('Please enter a cancellation remark');
+      return;
+    }
+    setIsCancelling(true);
+    try {
+      const now = Date.now();
+
+      // 1. Mark invoice as cancelled
+      await updateRecord('sales/invoices', cancellingInvoice.id, {
+        status: 'cancelled',
+        cancelledAt: now,
+        cancelRemark: cancelRemark.trim(),
+        updatedAt: now,
+      });
+
+      // 2. Unlock the linked sales order (set back to Confirmed so it can be re-invoiced)
+      if (cancellingInvoice.orderId) {
+        await updateRecord('sales/orderAcknowledgements', cancellingInvoice.orderId, {
+          invoiceStatus: 'notgenerated',
+          updatedAt: now,
+        });
+      }
+
+      toast.success(`Invoice ${cancellingInvoice.invoiceNumber} cancelled. Linked order unlocked.`);
+
+      // Update local state
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === cancellingInvoice.id
+            ? { ...inv, status: 'cancelled', cancelledAt: now, cancelRemark: cancelRemark.trim() }
+            : inv
+        )
+      );
+
+      setIsCancelOpen(false);
+      setCancellingInvoice(null);
+      setCancelRemark('');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to cancel invoice');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -1320,6 +1379,7 @@ export default function InvoicesPage() {
                           <TableHead>Customer</TableHead>
                           <TableHead>Amount</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead>Cancel Remark</TableHead>
                           <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1335,8 +1395,11 @@ export default function InvoicesPage() {
                               ₹{Number(inv.grandTotal || 0).toFixed(2)}
                             </TableCell>
                             <TableCell>
-                              <span className="px-3 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
-                                Generated
+                              <span className={`px-3 py-1 text-xs rounded-full font-medium ${inv.status === 'cancelled'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-green-100 text-green-800'
+                                }`}>
+                                {inv.status === 'cancelled' ? 'Cancelled' : 'Generated'}
                               </span>
                             </TableCell>
                             <TableCell className="space-x-2">
@@ -1360,18 +1423,52 @@ export default function InvoicesPage() {
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => navigate(`/sales/invoices/edit/${inv.id}`)}
-                                title="Edit"
+                                title={inv.status === 'cancelled' ? 'Cannot edit a cancelled invoice' : 'Edit'}
+                                disabled={inv.status === 'cancelled'}
+                                className={inv.status === 'cancelled' ? 'opacity-30 cursor-not-allowed' : ''}
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDelete(inv.id)}
-                                title="Delete"
-                              >
-                                <Trash2 className="h-4 w-4 text-red-600" />
-                              </Button>
+                              {inv.status === 'cancelled' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-medium">
+                                  <Ban className="h-3 w-3" />Cancelled
+                                </span>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => openCancelInvoice(inv)}
+                                  title="Cancel Invoice"
+                                >
+                                  <Ban className="h-4 w-4 text-red-600" />
+                                </Button>
+                              )}
+                            </TableCell>
+                            {/* Status cell — already exists, keep it */}
+                            <TableCell>
+                              <span className={`px-3 py-1 text-xs rounded-full font-medium ${inv.status === 'cancelled'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-green-100 text-green-800'
+                                }`}>
+                                {inv.status === 'cancelled' ? 'Cancelled' : 'Generated'}
+                              </span>
+                            </TableCell>
+
+                            {/* ADD THIS new cell right after: */}
+                            <TableCell className="max-w-[200px]">
+                              {inv.status === 'cancelled' && inv.cancelRemark ? (
+                                <div className="flex items-start gap-1.5">
+                                  <Ban className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+                                  <span
+                                    className="text-xs text-red-700 line-clamp-2"
+                                    title={inv.cancelRemark}
+                                  >
+                                    {inv.cancelRemark}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1391,7 +1488,48 @@ export default function InvoicesPage() {
         {selectedInvoice && (
           <InvoicePreviewModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />
         )}
+        {/* Cancel Invoice Dialog */}
+        {isCancelOpen && cancellingInvoice && (
+          <Dialog open={isCancelOpen} onOpenChange={(open) => { if (!open) { setIsCancelOpen(false); setCancelRemark(''); } }}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-700">
+                  <Ban className="h-5 w-5" />
+                  Cancel Invoice — {cancellingInvoice.invoiceNumber}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <p className="text-sm text-muted-foreground">
+                  Cancelling this invoice will mark it as <strong>Cancelled</strong> and unlock the linked sales order for re-invoicing. This action is recorded and cannot be undone.
+                </p>
+                <div>
+                  <Label>Cancellation Remark <span className="text-red-500">*</span></Label>
+                  <Textarea
+                    value={cancelRemark}
+                    onChange={(e) => setCancelRemark(e.target.value)}
+                    placeholder="e.g. Wrong quantity, customer dispute, billing error..."
+                    rows={3}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-2">
+                <Button variant="outline" onClick={() => { setIsCancelOpen(false); setCancelRemark(''); }}>
+                  Keep Invoice
+                </Button>
+                <Button
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  onClick={handleCancelInvoice}
+                  disabled={!cancelRemark.trim() || isCancelling}
+                >
+                  <Ban className="h-4 w-4 mr-1" />
+                  {isCancelling ? 'Cancelling...' : 'Confirm Cancellation'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
-    </div>
+    </div >
   )
 }
