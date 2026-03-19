@@ -160,11 +160,9 @@ export default function MonthlyAttendanceSheet() {
 
               if (recordStatus === "Present" || recordStatus === "Half Day") {
                 status = "P";
-              } else if (recordStatus === "Leave") {
-                status = "L";
               } else if (recordStatus === "Holiday" || recordStatus === "Week Off" || newHolidays.has(dateStr)) {
                 status = "H";
-              } else if (recordStatus === "Absent") {
+              } else if (recordStatus === "Absent" || recordStatus === "Leave") {
                 status = "A";
               }
 
@@ -281,7 +279,7 @@ export default function MonthlyAttendanceSheet() {
 
       // Add summary columns at the end
       row["Present Days"] = emp.present;
-      row["Leave + Absent"] = emp.totalAbsentAndLeave;
+      row["Total Absent"] = emp.totalAbsentAndLeave;
       row["Total OT Hours"] = emp.totalOtFormatted;
       row["Pending Hours"] = emp.totalPendingFormatted;
       row["Net OT Hours"] = emp.netOtFormatted;
@@ -308,7 +306,7 @@ export default function MonthlyAttendanceSheet() {
     // Add column width for summary columns
     cols.push(
       { wch: 12 }, // Present Days
-      { wch: 15 }, // Leave + Absent
+      { wch: 15 }, // Total Absent
       { wch: 15 }, // Total OT Hours
       { wch: 15 }, // Pending Hours
       { wch: 15 }  // Net OT Hours
@@ -409,7 +407,7 @@ export default function MonthlyAttendanceSheet() {
                       DAYS
                     </th>
                     <th rowSpan={2} className="px-6 py-5 font-bold text-green-300">P</th>
-                    <th rowSpan={2} className="px-6 py-5 font-bold text-red-300">L+A</th>
+                    <th rowSpan={2} className="px-6 py-5 font-bold text-red-300">Absent</th>
                     <th rowSpan={2} className="px-6 py-5 font-bold text-orange-300">OT Hrs</th>
                     <th rowSpan={2} className="px-6 py-5 font-bold text-purple-300">Pending</th>
                     <th rowSpan={2} className="px-6 py-5 font-bold text-emerald-300">Net OT</th>
@@ -474,19 +472,18 @@ export default function MonthlyAttendanceSheet() {
 
           {/* Legend */}
           <div className="mt-10 flex flex-wrap justify-center gap-6 text-lg font-medium">
-            {["P", "L", "H", "A"].map((s) => (
+            {["P", "H", "A"].map((s) => (
               <span key={s} className="flex items-center gap-3">
                 <span
                   className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-xl ${
                     s === "P" ? "bg-green-500" :
-                    s === "L" ? "bg-red-500" :
                     s === "H" ? "bg-blue-500" : "bg-gray-500"
                   }`}
                 >
                   {s}
                 </span>
                 <span>
-                  {s === "P" ? "Present" : s === "L" ? "Leave" : s === "H" ? "Holiday" : "Absent"}
+                  {s === "P" ? "Present" : s === "H" ? "Holiday" : "Absent"}
                 </span>
               </span>
             ))}

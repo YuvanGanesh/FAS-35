@@ -131,8 +131,8 @@ const calculateWorkHours = (
 ) => {
   const config = SHIFT_CONFIGS[shiftType];
 
-  // If already marked as Leave, Holiday, or Week Off, return zeros
-  if (status && ['Leave', 'Holiday', 'Week Off'].includes(status)) {
+  // If already marked as Holiday or Select, return zeros
+  if (status && ['Holiday', 'Select'].includes(status)) {
     return { workHrs: 0, otHrs: 0, pendingHrs: 0, actualWorkHrs: 0, autoStatus: null };
   }
 
@@ -375,7 +375,7 @@ export default function EmployeeTimesheet() {
         } else {
           list.push({
             date: dateStr,
-            status: isSunday ? 'Holiday' : 'Absent',
+            status: isSunday ? 'Holiday' : 'Select',
             checkIn: '',
             lunchIn: '',
             lunchOut: '',
@@ -681,7 +681,6 @@ const saveEdit = async (date: string) => {
 
   const present = records.filter(r => r.status === 'Present').length;
   const holiday = records.filter(r => r.status === 'Holiday').length;
-  const leave = records.filter(r => r.status === 'Leave').length;
   const halfDay = records.filter(r => r.status === 'Half Day').length;
   const absent = records.filter(r => r.status === 'Absent').length;
   
@@ -752,7 +751,7 @@ const saveEdit = async (date: string) => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 md:gap-4">
         <Card className="text-center">
           <CardContent className="pt-4 md:pt-6 p-2 md:p-6">
             <div className="text-xl md:text-3xl font-bold">{daysInMonth}</div>
@@ -763,12 +762,6 @@ const saveEdit = async (date: string) => {
           <CardContent className="pt-4 md:pt-6 p-2 md:p-6">
             <div className="text-xl md:text-3xl font-bold text-green-700">{present}</div>
             <div className="text-xs md:text-sm">Present</div>
-          </CardContent>
-        </Card>
-        <Card className="text-center bg-blue-50">
-          <CardContent className="pt-4 md:pt-6 p-2 md:p-6">
-            <div className="text-xl md:text-3xl font-bold text-blue-700">{leave}</div>
-            <div className="text-xs md:text-sm">Leave</div>
           </CardContent>
         </Card>
         <Card className="text-center bg-amber-50">
@@ -909,7 +902,7 @@ const saveEdit = async (date: string) => {
                         ? 'bg-green-100 text-green-800'
                         : r.status === 'Half Day'
                         ? 'bg-yellow-100 text-yellow-800'
-                        : r.status === 'Leave' || r.status === 'Absent'
+                        : r.status === 'Absent' || r.status === 'Select'
                         ? 'bg-red-100 text-red-800'
                         : 'bg-purple-100 text-purple-800';
 
@@ -953,7 +946,7 @@ const saveEdit = async (date: string) => {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {['Present', 'Absent', 'Half Day', 'Leave', 'Holiday', 'Week Off'].map(
+                                {['Select', 'Present', 'Absent', 'Half Day', 'Holiday'].map(
                                   s => (
                                     <SelectItem key={s} value={s} className="text-xs">
                                       {s}

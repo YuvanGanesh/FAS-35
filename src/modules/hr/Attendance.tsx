@@ -400,7 +400,7 @@ export default function Attendance() {
   const markAttendance = async (
     empId: string,
     name: string,
-    status: 'Present' | 'Absent' | 'Half Day' | 'Leave' | 'Holiday' | 'Week Off',
+    status: 'Select' | 'Present' | 'Absent' | 'Half Day' | 'Holiday',
     shiftType: 'day' | 'night' | 'sunday',
     inH?: string, inM?: string, inP?: string,
     liH?: string, liM?: string, liP?: string,
@@ -532,9 +532,8 @@ export default function Attendance() {
       Present: 'bg-emerald-100 text-emerald-800',
       Absent: 'bg-red-100 text-red-800',
       'Half Day': 'bg-amber-100 text-amber-800',
-      Leave: 'bg-blue-100 text-blue-800',
       Holiday: 'bg-purple-100 text-purple-800',
-      'Week Off': 'bg-gray-100 text-gray-700',
+      Select: 'bg-gray-100 text-gray-600',
     };
     return map[status || ''] || 'bg-gray-100 text-gray-600';
   };
@@ -643,11 +642,10 @@ export default function Attendance() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card><CardContent className="pt-6 text-center"><p className="text-3xl font-bold">{employees.length}</p><p className="text-sm text-muted-foreground">Total</p></CardContent></Card>
         <Card className="bg-emerald-50"><CardContent className="pt-6 text-center text-emerald-700"><p className="text-3xl font-bold">{presentCount}</p><p>Present</p></CardContent></Card>
         <Card className="bg-red-50"><CardContent className="pt-6 text-center text-red-700"><p className="text-3xl font-bold">{absentCount}</p><p>Absent</p></CardContent></Card>
-        <Card className="bg-blue-50"><CardContent className="pt-6 text-center text-blue-700"><p className="text-3xl font-bold">{approvedLeaves.filter(l => selectedDate >= l.startDate && selectedDate <= l.endDate).length}</p><p>On Leave</p></CardContent></Card>
         <Card className="bg-amber-50"><CardContent className="pt-6 text-center text-amber-700"><p className="text-3xl font-bold">{halfDayCount}</p><p>Half Day</p></CardContent></Card>
         <Card className="bg-indigo-50"><CardContent className="pt-6 text-center text-indigo-700"><p className="text-3xl font-bold">{avgHours.toFixed(1)}h</p><p>Avg Hrs</p></CardContent></Card>
       </div>
@@ -743,7 +741,7 @@ export default function Attendance() {
                           <Select value={record?.status || ''} onValueChange={v => setAttendance(p => p.map(a => a.id === record.id ? { ...a, status: v } : a))}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              {['Present', 'Absent', 'Half Day', 'Leave', 'Holiday', 'Week Off'].map(s => (
+                              {['Select', 'Present', 'Absent', 'Half Day', 'Holiday'].map(s => (
                                 <SelectItem key={s} value={s}>{s}</SelectItem>
                               ))}
                             </SelectContent>

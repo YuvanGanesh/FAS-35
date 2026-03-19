@@ -279,7 +279,7 @@ export default function MonthlyAbsentLeaveReport() {
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-700 to-slate-800 text-white p-8 rounded-t-xl">
           <h1 className="text-4xl font-bold text-center mb-8">
-            Monthly Absent & Leave Report
+            Monthly Absent Report
           </h1>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-5xl mx-auto">

@@ -558,7 +558,7 @@ export default function PayrollPreparation() {
         ? Number((totalGrossEarnings * 0.0075).toFixed(2))
         : 0;
 
-    const totalDeductions = Number((pf + esi + row.loanDeduction + ldPay).toFixed(2));
+    const totalDeductions = Number((pf + esi + row.loanDeduction).toFixed(2));
     const totalEarnings = totalGrossEarnings;
     const netPayable = Number((totalEarnings - totalDeductions).toFixed(2));
 
@@ -789,12 +789,6 @@ export default function PayrollPreparation() {
       // `  - Special Allowance: ₹${(row.specialAllowance + row.additionalSpAllowance).toFixed(2)}`,
     ];
 
-    if (row.leaveDays > 0) {
-      // calculations.push(
-      //   ``,
-      //   `Leave/Absent Deduction: ${row.leaveDays} days × ₹${row.perDayRate.toFixed(2)} = -₹${row.ldPay.toFixed(2)} (DEDUCTED)`
-      // );
-    }
 
     calculations.forEach((line, idx) => {
       const y = yPosition + idx * 3.5;
@@ -853,7 +847,6 @@ export default function PayrollPreparation() {
       { label: 'PF', amount: row.pf },
       { label: 'ESI', amount: row.esi },
       { label: 'TDS', amount: 0 },
-      { label: 'LEAVE/ABSENT DEDUCTION', amount: row.ldPay },
       { label: 'LOAN RECOVERY', amount: row.loanDeduction },
     ];
 
@@ -1051,8 +1044,6 @@ export default function PayrollPreparation() {
       'P.D Pay',
       'H.D',
       'H.D Pay',
-      'L.D',
-      'L.D Deduction',
       'OT Hrs',
       'OT Amt',
       'Sundays',
@@ -1066,9 +1057,7 @@ export default function PayrollPreparation() {
       'Total Gross',
       'PF',
       'ESI',
-      'L.D Deduct',
       'Loan',
-      'Total Deductions',
       'Net Pay',
       'Bank Ac No',
       'PAN No',
@@ -1104,8 +1093,6 @@ export default function PayrollPreparation() {
         row.pdPay,
         row.halfDays,
         row.hdPay,
-        row.leaveDays,
-        row.ldPay,
         otDisplay,
         row.otAmount,
         row.sundayCount,
@@ -1119,9 +1106,7 @@ export default function PayrollPreparation() {
         row.totalEarnings,
         row.pf,
         row.esi,
-        row.ldPay,
         row.loanDeduction,
-        row.totalDeductions,
         row.netPayable,
         row.bankAccount,
         row.panNumber,
@@ -1249,7 +1234,7 @@ export default function PayrollPreparation() {
 
       {/* Statistics Cards */}
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 lg:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
           <Card className="shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs lg:text-sm font-medium text-gray-600">
@@ -1274,18 +1259,7 @@ export default function PayrollPreparation() {
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-orange-50 to-orange-100 shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xs lg:text-sm font-medium text-orange-700">
-                Deductions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl lg:text-3xl font-bold text-orange-900">
-                ₹{totals.deductions.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-              </div>
-            </CardContent>
-          </Card>
+
 
           <Card className="bg-gradient-to-br from-blue-50 to-blue-100 shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
@@ -1360,8 +1334,6 @@ export default function PayrollPreparation() {
                       <TableHead className="font-bold min-w-[100px]">P.D Pay</TableHead>
                       <TableHead className="font-bold text-center min-w-[60px]">H.D</TableHead>
                       <TableHead className="font-bold min-w-[90px]">H.D Pay</TableHead>
-                      <TableHead className="font-bold text-center min-w-[60px]">L.D</TableHead>
-                      <TableHead className="font-bold min-w-[90px]">L.D Deduct</TableHead>
                       <TableHead className="font-bold text-center min-w-[80px]">OT Hrs</TableHead>
                       <TableHead className="font-bold min-w-[100px]">OT Amt</TableHead>
                       <TableHead className="font-bold text-center min-w-[70px]">Holidays</TableHead>
@@ -1378,9 +1350,7 @@ export default function PayrollPreparation() {
                       <TableHead className="font-bold min-w-[90px]">PF</TableHead>
                       <TableHead className="font-bold min-w-[90px]">ESI</TableHead>
                       <TableHead className="font-bold min-w-[100px]">Loan</TableHead>
-                      <TableHead className="font-bold min-w-[120px] bg-orange-50">
-                        Total Ded.
-                      </TableHead>
+
                       <TableHead className="font-bold min-w-[140px] bg-green-50">
                         Net Pay
                       </TableHead>
@@ -1454,10 +1424,6 @@ export default function PayrollPreparation() {
                           <TableCell>₹{row.pdPay.toLocaleString('en-IN')}</TableCell>
                           <TableCell className="text-center">{row.halfDays}</TableCell>
                           <TableCell>₹{row.hdPay.toLocaleString('en-IN')}</TableCell>
-                          <TableCell className="text-center">{row.leaveDays}</TableCell>
-                          <TableCell className="text-red-600 font-bold">
-                            -₹{row.ldPay.toLocaleString('en-IN')}
-                          </TableCell>
                           <TableCell className="text-center font-medium text-blue-600">
                             {otDisplay}
                           </TableCell>
@@ -1518,9 +1484,7 @@ export default function PayrollPreparation() {
                               min={0}
                             />
                           </TableCell>
-                          <TableCell className="text-red-600 bg-orange-50 font-bold">
-                            -₹{row.totalDeductions.toLocaleString('en-IN')}
-                          </TableCell>
+
                           <TableCell className="text-lg font-bold text-green-700 bg-green-50">
                             ₹{row.netPayable.toLocaleString('en-IN')}
                           </TableCell>

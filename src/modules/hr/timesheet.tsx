@@ -132,7 +132,7 @@ const calculateWorkHours = (
 ) => {
   const config = SHIFT_CONFIGS[shiftType];
 
-  if (status && ['Leave', 'Holiday', 'Week Off', 'Absent'].includes(status)) {
+  if (status && ['Holiday', 'Absent', 'Select'].includes(status)) {
     return { workHrs: 0, otHrs: 0, pendingHrs: 0 };
   }
 
@@ -340,7 +340,7 @@ export default function EmployeeTimesheet() {
         } else {
           list.push({
             date: dateStr,
-            status: isSunday ? 'Holiday' : 'Absent',
+            status: isSunday ? 'Holiday' : 'Select',
             checkIn: '',
             lunchIn: '',
             lunchOut: '',
@@ -621,7 +621,6 @@ export default function EmployeeTimesheet() {
 
   const present = records.filter(r => r.status === 'Present').length;
   const holiday = records.filter(r => r.status === 'Holiday').length;
-  const leave = records.filter(r => r.status === 'Leave').length;
   const halfDay = records.filter(r => r.status === 'Half Day').length;
   const absent = records.filter(r => r.status === 'Absent').length;
   const totalOT = records.reduce((s, r) => s + r.otHrs, 0);
@@ -686,7 +685,7 @@ export default function EmployeeTimesheet() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <Card className="text-center">
           <CardContent className="pt-6">
             <div className="text-3xl font-bold">{daysInMonth}</div>
@@ -697,12 +696,6 @@ export default function EmployeeTimesheet() {
           <CardContent className="pt-6">
             <div className="text-3xl font-bold text-green-700">{present}</div>
             <div className="text-sm">Present</div>
-          </CardContent>
-        </Card>
-        <Card className="text-center bg-blue-50">
-          <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-blue-700">{leave}</div>
-            <div className="text-sm">Leave</div>
           </CardContent>
         </Card>
         <Card className="text-center bg-amber-50">
@@ -844,7 +837,7 @@ export default function EmployeeTimesheet() {
                         ? 'bg-green-100 text-green-800'
                         : r.status === 'Half Day'
                         ? 'bg-yellow-100 text-yellow-800'
-                        : r.status === 'Leave' || r.status === 'Absent'
+                        : r.status === 'Absent' || r.status === 'Select'
                         ? 'bg-red-100 text-red-800'
                         : 'bg-purple-100 text-purple-800';
 
@@ -882,7 +875,7 @@ export default function EmployeeTimesheet() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {['Present', 'Absent', 'Half Day', 'Leave', 'Holiday', 'Week Off'].map(
+                                {['Select', 'Present', 'Absent', 'Half Day', 'Holiday'].map(
                                   s => (
                                     <SelectItem key={s} value={s}>
                                       {s}
