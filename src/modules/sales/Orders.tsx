@@ -2173,7 +2173,7 @@ export default function SalesOrders() {
                     </div>
                     <div>
                       <Label>Currency</Label>
-                      <Select value={manualCurrency} onValueChange={setManualCurrency}>
+                      <Select value={manualCurrency} onValueChange={(v) => setManualCurrency(v as 'INR' | 'USD' | 'EUR' | 'GBP' | 'AED')}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="INR">INR (₹)</SelectItem>
