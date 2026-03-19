@@ -27,6 +27,25 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
  const database = getDatabase(app);
 
+ // ---------------------------------------------------------------------------
+// SANITIZE — strips undefined values (Firebase rejects them)
+// ---------------------------------------------------------------------------
+const sanitize = (obj: any): any => {
+  if (obj === null || obj === undefined) return null;
+  if (Array.isArray(obj)) return obj.map(sanitize);
+  if (typeof obj === 'object') {
+    const clean: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        clean[key] = sanitize(val);
+      }
+    }
+    return clean;
+  }
+  return obj;
+};
+
 // ---------------------------------------------------------------------------
 // CREATE RECORD
 // ---------------------------------------------------------------------------
@@ -34,11 +53,11 @@ export const createRecord = async (path: string, data: any) => {
   const listRef = ref(database, path);
   const newRef = push(listRef);
 
-  await set(newRef, {
+  await set(newRef, sanitize({
     ...data,
     id: newRef.key,
     createdAt: Date.now(),
-  });
+  }));
 
   return newRef.key;
 };
@@ -48,10 +67,10 @@ export const createRecord = async (path: string, data: any) => {
 // ---------------------------------------------------------------------------
 export const updateRecord = async (path: string, id: string, data: any) => {
   const recordRef = ref(database, `${path}/${id}`);
-  await update(recordRef, {
+  await update(recordRef, sanitize({
     ...data,
     updatedAt: Date.now(),
-  });
+  }));
 };
 
 // ---------------------------------------------------------------------------
@@ -61,15 +80,14 @@ export const batchUpdate = async (path: string, updates: Array<{ id: string; upd
   const updatesObj: Record<string, any> = {};
 
   updates.forEach(({ id, updates }) => {
-    updatesObj[`${path}/${id}`] = {
+    updatesObj[`${path}/${id}`] = sanitize({
       ...updates,
       updatedAt: Date.now(),
-    };
+    });
   });
 
   await update(ref(database), updatesObj);
 };
-
 // ---------------------------------------------------------------------------
 // DELETE RECORD
 // ---------------------------------------------------------------------------
