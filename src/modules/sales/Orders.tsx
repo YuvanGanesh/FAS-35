@@ -79,7 +79,8 @@ type SalesOrderStatus =
   | 'Ready for Dispatch'
   | 'Delivered'
   | 'Invoice Generated'
-  | 'Closed';
+  | 'Closed'
+  | 'Cancelled';
 
 type ProductionJobStatus = 'notstarted' | 'running' | 'paused' | 'completed';
 type QCStatus = 'pending' | 'in-progress' | 'completed';
@@ -1220,7 +1221,7 @@ export default function SalesOrders() {
 
   const [orderCreationType, setOrderCreationType] = useState<'quotation' | 'manual'>('quotation');
   const [manualCustomerId, setManualCustomerId] = useState('');
-  const [manualCurrency, setManualCurrency] = useState('INR');
+  const [manualCurrency, setManualCurrency] = useState<'INR' | 'USD' | 'EUR' | 'GBP' | 'AED'>('INR');
   const [manualPaymentTerms, setManualPaymentTerms] = useState('');
   const [manualDispatchMode, setManualDispatchMode] = useState('');
   const [manualDeliveryDate, setManualDeliveryDate] = useState('');
@@ -1528,7 +1529,14 @@ export default function SalesOrders() {
     );
   };
 
-  const calculateManualOrderTotals = () => {
+  const calculateManualOrderTotals = (): {
+    subtotal: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    transportCharge: number;
+    grandTotal: number;
+  } => {
     const subtotal = manualItems.reduce((sum, item) => sum + item.amount, 0);
     const cgst = (manualCurrency === 'INR' && manualCgstPercent !== undefined)
       ? subtotal * (manualCgstPercent / 100) : 0;
@@ -1696,7 +1704,7 @@ export default function SalesOrders() {
     }
     try {
       await updateRecord('sales/orderAcknowledgements', cancellingOrder.id, {
-        status: 'Cancelled' as any,
+        status: 'Cancelled',
         cancelledAt: Date.now(),
         cancelRemark: cancelRemark.trim(),
         updatedAt: Date.now(),
@@ -1790,6 +1798,7 @@ export default function SalesOrders() {
       'Delivered': 95,
       'Invoice Generated': 98,
       'Closed': 100,
+      'Cancelled': 0,
     };
     return map[status] || 10;
   };
