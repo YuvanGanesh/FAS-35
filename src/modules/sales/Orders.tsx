@@ -3005,15 +3005,31 @@ export default function SalesOrders() {
                                   <Button size="sm" variant="outline" onClick={() => startEditingJob(job)} className="shadow-sm">
                                     <Edit className="h-4 w-4 mr-1" /> Edit Flow
                                   </Button>
-                                  {(inspection?.notOkQty || 0) > 0 && inspection?.qcStatus === 'completed' && (
-                                    jobs.some((j) => (j as any).reproductionOf === job.id && j.status !== 'completed') ? (
-                                      <Button size="sm" variant="outline" disabled title="Re-production in progress" className="ml-2 opacity-50"><RotateCcw className="h-4 w-4 mr-1" /> Repro</Button>
-                                    ) : (
-                                      <Button size="sm" variant="outline" className="border-orange-400 text-orange-700 hover:bg-orange-50 ml-2" onClick={() => handleReproduceRejected(job, inspection.notOkQty || 0, trackingSelectedOrder)} title="Re-produce rejected units">
+                                  {(inspection?.notOkQty || 0) > 0 && inspection?.qcStatus === 'completed' && (() => {
+                                    const hasAnyRepro = jobs.some((j) => (j as any).reproductionOf === job.id);
+                                    const hasActiveRepro = jobs.some((j) => (j as any).reproductionOf === job.id && j.status !== 'completed');
+
+                                    // Hide button entirely if re-production was ever created (active or completed)
+                                    if (hasAnyRepro) {
+                                      return (
+                                        <Button size="sm" variant="outline" disabled
+                                          title={hasActiveRepro ? "Re-production in progress" : "Re-production completed"}
+                                          className="ml-2 opacity-40 cursor-not-allowed">
+                                          <RotateCcw className="h-4 w-4 mr-1" />
+                                          {hasActiveRepro ? 'Repro...' : 'Reproed'}
+                                        </Button>
+                                      );
+                                    }
+
+                                    return (
+                                      <Button size="sm" variant="outline"
+                                        className="border-orange-400 text-orange-700 hover:bg-orange-50 ml-2"
+                                        onClick={() => handleReproduceRejected(job, inspection.notOkQty || 0, trackingSelectedOrder)}
+                                        title="Re-produce rejected units">
                                         <RotateCcw className="h-4 w-4 mr-1" /> Repro
                                       </Button>
-                                    )
-                                  )}
+                                    );
+                                  })()}
                                 </TableCell>
                               </>
                             )}
