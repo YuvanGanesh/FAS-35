@@ -138,7 +138,6 @@ interface PayrollRow {
   sundayOtMinutes?: number;
   sundayAllowance: number;
   sundayCount: number;
-  sundayPay: number;
   loanDeduction: number;
   additionalSpAllowance: number;
   fullMonthBonus: number;
@@ -349,7 +348,7 @@ export default function PayrollPreparation() {
               let totalOtMinutes = 0;
               let totalPendingHours = 0;
               let sundayWorkedCount = 0; // **NEW: Track Sundays worked**
-              let sundayOtMinutesForWorkers = 0;
+              let sundayAbsentCount = 0; // **NEW: Track absent Sundays**
 
               empAttendance.forEach((rec) => {
                 const isSunday = rec.shiftType === 'sunday' || rec.status === 'Present';
@@ -358,22 +357,23 @@ export default function PayrollPreparation() {
                 const recDate = new Date(rec.date);
                 const isSundayDate = recDate.getDay() === 0;
 
-                if (isSundayDate && rec.status === 'Present') {
-                  // **Employee worked on Sunday**
-                  sundayWorkedCount++;
+                if (isSundayDate) {
+                  if (rec.status === 'Absent' || rec.status === 'Leave') {
+                    sundayAbsentCount++;
+                  } else if (rec.status === 'Present') {
+                    // **Employee worked on Sunday**
+                    sundayWorkedCount++;
 
-                  if (emp.department === 'Staff') {
-                    // **For Staff: Count as present day**
-                    present++;
-                  } else if (emp.department === 'Worker' || emp.department === 'Other Workers') {
-                    // **For Workers: Keep Sunday hours separate for Sunday Allowance calculation**
-                    const hrs =
-                      typeof rec.workHrs === 'number'
-                        ? rec.workHrs
-                        : typeof rec.totalHours === 'number'
-                          ? rec.totalHours
-                          : 0;
-                    sundayOtMinutesForWorkers += Math.round(hrs * 60);
+                    if (emp.department === 'Staff') {
+                      // **For Staff: Count as present day**
+                      present++;
+                    } else if (emp.department === 'Worker' || emp.department === 'Other Workers') {
+                      // **For Workers: Both workHrs and otHrs on Sunday count as OT**
+                      const wHrs = typeof rec.workHrs === 'number' ? rec.workHrs : 0;
+                      const oHrs = typeof rec.otHrs === 'number' ? rec.otHrs : 0;
+                      const totalSunHrs = typeof rec.totalHours === 'number' ? rec.totalHours : (wHrs + oHrs);
+                      totalOtMinutes += Math.round(totalSunHrs * 60);
+                    }
                   }
                 } else if (!isSundayDate) {
                   // **Regular weekday attendance**
@@ -436,8 +436,8 @@ export default function PayrollPreparation() {
               // FIX: Use helper function to safely get salary breakdown
               const salaryBreakdown = getSalaryBreakdown(emp);
 
-              // **FIXED: Include wages for all Sundays unconditionally**
-              const effectiveSundayCount = sundaysInMonth;
+              // **FIXED: Include wages for all Sundays unconditionally except Absent/Leave**
+              const effectiveSundayCount = sundaysInMonth - sundayAbsentCount;
 
               const row: PayrollRow = {
                 employeeId: emp.employeeId,
@@ -450,13 +450,13 @@ export default function PayrollPreparation() {
                 panNumber: emp.bankDetails?.panNumber || emp.panNumber || '-',
                 esiNumber: emp.bankDetails?.esiNumber || emp.esiNumber || '-',
                 pfNumber: emp.bankDetails?.pfNumber || emp.pfNumber || '-',
-                presentDays: fullWorkingDays,
+                presentDays: fullWorkingDays, // Strict physical present days
                 actualPresentDays: present,
                 halfDays: half,
                 leaveDays: leave,
                 totalDays: totalDaysInMonth,
-                payableDays: fullWorkingDays + half * 0.5,
-                lopDays: totalDaysInMonth - (fullWorkingDays + half * 0.5),
+                payableDays: fullWorkingDays + effectiveSundayCount + applicableHolidaysCount + (half * 0.5),
+                lopDays: totalDaysInMonth - (fullWorkingDays + half * 0.5), // Retaining old definition to not penalize paid sundays
                 perDayRate: Number((monthlySalary / totalDaysInMonth).toFixed(2)),
                 pdPay: 0,
                 hdPay: 0,
@@ -467,10 +467,9 @@ export default function PayrollPreparation() {
                 holidayPay: 0,
                 sundaysInMonth: sundaysInMonth,
                 sundaysWorked: sundayWorkedCount,
-                sundayOtMinutes: sundayOtMinutesForWorkers,
+                sundayOtMinutes: 0,
                 sundayAllowance: 0, // Recalculated in recalculateRow
                 sundayCount: effectiveSundayCount,
-                sundayPay: 0,
                 loanDeduction,
                 additionalSpAllowance: salaryBreakdown.additionalSpecialAllowance || 0,
                 fullMonthBonus,
@@ -510,57 +509,56 @@ export default function PayrollPreparation() {
 
     const perDayRate = Number((monthlySalary / totalDays).toFixed(2));
 
-    const pdPay = Number((row.presentDays * perDayRate).toFixed(2));
-    const hdPay = Number((row.halfDays * (perDayRate / 2)).toFixed(2));
-    const ldPay = Number((row.leaveDays * perDayRate).toFixed(2));
+    // P.D Pay derives cleanly from payableDays (which includes present, sundays, holidays, and 0.5 * halfDays)
+    const pdPay = Math.round(row.payableDays * perDayRate);
+    const hdPay = Math.round(row.halfDays * (perDayRate / 2)); // Displayed in UI, mathematically embedded in P.D Pay
+    const ldPay = Math.round(row.leaveDays * perDayRate);
 
     const multiplier = (emp.department === 'Staff' || emp.department?.toLowerCase() === 'staff') ? 1 : 1.5;
     const dynamicOtRate = (perDayRate / 8) * multiplier;
-    const otAmount = Number(((row.otMinutes / 60) * dynamicOtRate).toFixed(2));
-
-    const sundayPay = Number((row.sundayCount * perDayRate).toFixed(2));
+    const otAmount = Math.round((row.otMinutes / 60) * dynamicOtRate);
     
     let sundayAllowance = 0;
     if (emp.department === 'Staff' || emp.department?.toLowerCase() === 'staff') {
       sundayAllowance = row.sundaysWorked * 500;
     } else {
-      const hourlyRate = (perDayRate / 8) * 1.5; 
-      sundayAllowance = Number((((row.sundayOtMinutes || 0) / 60) * hourlyRate).toFixed(2));
+      sundayAllowance = 0; // Worker Sunday hours are now included in normal OT
     }
 
-    // 1) Basic = P.D Pay / 2
-    const basic = Number((pdPay / 2).toFixed(2));
+    // 1) Basic = 50% of P.D Pay
+    const basic = Math.round(pdPay * 0.50);
     
-    // 2) HRA = Basic / 2
-    const hra = Number((basic / 2).toFixed(2));
+    // 2) HRA = 25% of P.D Pay (Direct calculation prevents cascading round-up errors)
+    const hra = Math.round(pdPay * 0.25);
     
     // 3) CA = manual input (already in row.conveyance)
-    const conveyance = row.conveyance;
+    const conveyance = Math.round(row.conveyance || 0);
     
     // 4) Other All. = P.D Pay - Basic - HRA - CA
-    const otherAllowance = Number((pdPay - basic - hra - conveyance).toFixed(2));
+    // Calculated by subtraction to guarantee Basic + HRA + CA + Other == P.D Pay perfectly
+    const otherAllowance = pdPay - basic - hra - conveyance;
 
-    // 5) Total Gross = Basic + HRA + CA + Other All. + Special Allowance + OT Amt + Sunday Pay + Sunday Allowance
+    // 5) Total Gross = Basic + HRA + CA + Other All. + Special Allowance + OT Amt + Sunday Allowance
     // Special Allowance is manual input (already in row.additionalSpAllowance)
-    const totalGrossEarnings = Number((
-      basic + hra + conveyance + otherAllowance +
-      row.additionalSpAllowance + row.fullMonthBonus +
-      otAmount + sundayPay + sundayAllowance
-    ).toFixed(2));
+    const additionalSpAllowance = Math.round(row.additionalSpAllowance || 0);
+    const fullMonthBonus = Math.round(row.fullMonthBonus || 0);
+
+    const totalGrossEarnings = pdPay + additionalSpAllowance + fullMonthBonus + otAmount + sundayAllowance;
 
     // PF calculation based on Basic + Conveyance
     const pfBase = basic + conveyance;
-    const pf = isPFApplicable(emp) ? Number((pfBase * 0.12).toFixed(2)) : 0;
+    const pf = isPFApplicable(emp) ? Math.round(pfBase * 0.12) : 0;
 
     // ESI calculation based on Total Gross
     const esi =
       isESIApplicable(emp) && monthlySalary <= 21000
-        ? Number((totalGrossEarnings * 0.0075).toFixed(2))
+        ? Math.round(totalGrossEarnings * 0.0075)
         : 0;
 
-    const totalDeductions = Number((pf + esi + row.loanDeduction).toFixed(2));
+    const loanDeduction = Math.round(row.loanDeduction || 0);
+    const totalDeductions = pf + esi + loanDeduction;
     const totalEarnings = totalGrossEarnings;
-    const netPayable = Number((totalEarnings - totalDeductions).toFixed(2));
+    const netPayable = totalEarnings - totalDeductions;
 
     return {
       ...row,
@@ -570,8 +568,7 @@ export default function PayrollPreparation() {
       hdPay,
       ldPay,
       otAmount,
-      holidayPay: 0,
-      sundayPay,
+      holidayPay: 0, // Holiday pay is mathematically embedded into P.D Pay (via payableDays)
       sundayAllowance,
       fullMonthBonus: row.fullMonthBonus,
       basic,
@@ -731,7 +728,7 @@ export default function PayrollPreparation() {
       { label: 'Date of Joining', value: formatJoiningDate(emp.joiningDate || emp.dateJoined) },
       { label: 'Monthly Salary', value: `Rs. ${formatAmount(row.monthlySalary)}` },
       { label: 'Total Working Days', value: row.totalDays.toString() },
-      { label: 'Present Days', value: row.actualPresentDays.toString() },
+      { label: 'Present Days', value: (row.actualPresentDays + row.halfDays * 0.5).toString() },
       { label: 'Leaves Days', value: row.leaveDays.toString() },
       { label: 'OT Hours', value: row.otMinutes > 0 ? otDisplay : '-' },
       { label: 'Sundays in Month', value: row.sundaysInMonth.toString() },
@@ -772,7 +769,7 @@ export default function PayrollPreparation() {
     // Calculate the breakdown components
     const grossPayable = row.pdPay + row.hdPay; // Present + Half day pay
     const totalEarningsBeforeDeductions =
-      grossPayable + row.holidayPay + row.sundayPay + row.otAmount;
+      grossPayable + row.holidayPay + row.otAmount + row.sundayAllowance + row.additionalSpAllowance + row.fullMonthBonus;
 
     const calculations = [
       // `Present Pay: ${row.actualPresentDays} days × ₹${row.perDayRate.toFixed(2)} = ₹${row.pdPay.toFixed(2)}`,
@@ -838,7 +835,6 @@ export default function PayrollPreparation() {
       { label: 'SPECIAL ALLOWANCE', amount: row.additionalSpAllowance },
       { label: 'FULL MONTH PRESENT', amount: row.fullMonthBonus },
       { label: 'OT AMOUNT', amount: row.otAmount },
-      { label: 'SUNDAY PAY', amount: row.sundayPay },
       { label: 'SUNDAY ALLOWANCE', amount: row.sundayAllowance },
       // Holiday Pay removed
     ];
@@ -1047,7 +1043,6 @@ export default function PayrollPreparation() {
       'OT Hrs',
       'OT Amt',
       'Sundays',
-      'Sunday Pay',
       'Sunday Allowance',
       'Full Month Bonus',
       'Basic',
@@ -1096,7 +1091,6 @@ export default function PayrollPreparation() {
         otDisplay,
         row.otAmount,
         row.sundayCount,
-        row.sundayPay,
         row.sundayAllowance,
         row.fullMonthBonus,
         row.basic,
@@ -1205,7 +1199,9 @@ export default function PayrollPreparation() {
                 })}
               </h1>
               <p className="text-gray-600 mt-1 text-sm lg:text-base">
-                Includes holiday pay & Sunday pay based on daily salary rate
+                Sunday pay based on daily salary rate<br/>
+                Pay Days = Present days + Sundays + H.D<br/>
+                P.D Pay = Pay Days * Daily Salary Rate
               </p>
             </div>
 
@@ -1328,9 +1324,9 @@ export default function PayrollPreparation() {
                       <TableHead className="font-bold min-w-[90px]">Pending Hrs</TableHead>
                       <TableHead className="font-bold text-center min-w-[80px]">Days</TableHead>
                       <TableHead className="font-bold text-center min-w-[80px]">
-                        Pay Days
+                        Pay Days 
                       </TableHead>
-                      <TableHead className="font-bold text-center min-w-[80px]">Present</TableHead>
+                      <TableHead className="font-bold text-center min-w-[80px]">Present Days</TableHead>
                       <TableHead className="font-bold min-w-[100px]">P.D Pay</TableHead>
                       <TableHead className="font-bold text-center min-w-[60px]">H.D</TableHead>
                       <TableHead className="font-bold min-w-[90px]">H.D Pay</TableHead>
@@ -1338,7 +1334,6 @@ export default function PayrollPreparation() {
                       <TableHead className="font-bold min-w-[100px]">OT Amt</TableHead>
                       <TableHead className="font-bold text-center min-w-[70px]">Holidays</TableHead>
                       <TableHead className="font-bold text-center min-w-[70px]">Sundays</TableHead>
-                      <TableHead className="font-bold min-w-[100px]">Sunday Pay</TableHead>
                       <TableHead className="font-bold min-w-[100px]">Special Allowance</TableHead>
                       <TableHead className="font-bold min-w-[100px]">Basic</TableHead>
                       <TableHead className="font-bold min-w-[100px]">HRA</TableHead>
@@ -1381,7 +1376,7 @@ export default function PayrollPreparation() {
                             : 'secondary';
 
                       const multiplier = (row.department === 'Staff' || row.department?.toLowerCase() === 'staff') ? 1 : 1.5;
-                      const empOtRate = Number((row.perDayRate / 8) * multiplier).toFixed(2);
+                      const empOtRate = Math.round((row.perDayRate / 8) * multiplier);
 
                       return (
                         <TableRow
@@ -1399,7 +1394,7 @@ export default function PayrollPreparation() {
                           <TableCell className="sticky left-[50px] bg-white z-10">
                             <div className="font-semibold text-gray-900">{row.name}</div>
                             <div className="text-[10px] text-gray-500 mt-0.5">
-                              Daily Rate: ₹{row.perDayRate.toFixed(2)} | OT: ₹{empOtRate}/hr
+                              Daily Rate: ₹{Math.round(row.perDayRate).toLocaleString('en-IN')} | OT: ₹{empOtRate.toLocaleString('en-IN')}/hr
                             </div>
                           </TableCell>
                           <TableCell>
@@ -1435,9 +1430,6 @@ export default function PayrollPreparation() {
                           </TableCell>
                           <TableCell className="text-center font-medium text-purple-600">
                             {row.sundayCount}
-                          </TableCell>
-                          <TableCell className="font-bold text-purple-700">
-                            ₹{row.sundayPay.toLocaleString('en-IN')}
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <Input

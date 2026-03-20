@@ -623,7 +623,14 @@ export default function EmployeeTimesheet() {
   const holiday = records.filter(r => r.status === 'Holiday').length;
   const halfDay = records.filter(r => r.status === 'Half Day').length;
   const absent = records.filter(r => r.status === 'Absent').length;
-  const totalOT = records.reduce((s, r) => s + r.otHrs, 0);
+  // UPDATED: Total OT now includes OT from worker Sunday OT
+  const totalOT = records.reduce((s, r) => {
+    let ot = r.otHrs;
+    if (new Date(r.date).getDay() === 0 && department !== 'Staff' && r.status === 'Present') {
+      ot = r.workHrs + r.otHrs; // Wait, actually workHrs in timesheet.tsx was used without actualWorkHrs
+    }
+    return s + ot;
+  }, 0);
   
   // FIXED: Only count pending hours from marked dates
   const totalPending = records.filter(r => r.isMarked).reduce((s, r) => s + r.pendingHrs, 0);
@@ -779,13 +786,10 @@ export default function EmployeeTimesheet() {
             {department !== 'Staff' && (
               <div className="flex flex-col items-center">
                 <label className="text-sm font-medium text-gray-600 mb-2">
-                  Sunday OT (₹{OT_RATE_PER_HOUR_WORKER}/hr)
+                  Sunday OT Included in Regular OT
                 </label>
-                <div className="text-3xl font-bold text-green-700">
-                  ₹{sundayOtAmount}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {formatHoursToHMM(monthlySummary.sundayOtHours)} hrs
+                <div className="text-sm md:text-base font-semibold text-green-700">
+                  Worker Sunday hours added to main OT pool at ₹{OT_RATE_PER_HOUR_WORKER}/hr
                 </div>
               </div>
             )}

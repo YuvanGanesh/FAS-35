@@ -307,19 +307,23 @@ const Esi: React.FC = () => {
           let half = 0;
           let totalOtMinutes = 0;
           let sundayWorkedCount = 0;
-          let sundayOtMinutesForWorkers = 0;
+          let sundayAbsentCount = 0;
 
           empAttendance.forEach((rec) => {
             const recDate = new Date(rec.date);
             const isSundayDate = recDate.getDay() === 0;
 
-            if (isSundayDate && rec.status === 'Present') {
-              sundayWorkedCount++;
-              if ((emp as any).department === 'Staff') {
-                present++;
-              } else if ((emp as any).department === 'Worker' || (emp as any).department === 'Other Workers') {
-                const hrs = typeof rec.workHrs === 'number' ? rec.workHrs : typeof rec.totalHours === 'number' ? rec.totalHours : 0;
-                sundayOtMinutesForWorkers += Math.round(hrs * 60);
+            if (isSundayDate) {
+              if (rec.status === 'Absent' || rec.status === 'Leave') {
+                sundayAbsentCount++;
+              } else if (rec.status === 'Present') {
+                sundayWorkedCount++;
+                if ((emp as any).department === 'Staff') {
+                  present++;
+                } else if ((emp as any).department === 'Worker' || (emp as any).department === 'Other Workers') {
+                  const hrs = typeof rec.workHrs === 'number' ? rec.workHrs : typeof rec.totalHours === 'number' ? rec.totalHours : 0;
+                  totalOtMinutes += Math.round(hrs * 60);
+                }
               }
             } else if (!isSundayDate) {
               if (rec.status === 'Present') {
@@ -341,13 +345,10 @@ const Esi: React.FC = () => {
               const recDate = new Date(rec.date);
               const isSundayDate = recDate.getDay() === 0;
               if (isSundayDate && rec.status === 'Present') {
-                const hrs =
-                  typeof rec.workHrs === 'number'
-                    ? rec.workHrs
-                    : typeof rec.totalHours === 'number'
-                      ? rec.totalHours
-                      : 0;
-                totalOtMinutes += Math.round(hrs * 60);
+                const wHrs = typeof rec.workHrs === 'number' ? rec.workHrs : 0;
+                const oHrs = typeof rec.otHrs === 'number' ? rec.otHrs : 0;
+                const totalSunHrs = typeof rec.totalHours === 'number' ? rec.totalHours : (wHrs + oHrs);
+                totalOtMinutes += Math.round(totalSunHrs * 60);
               }
             });
           }
@@ -371,40 +372,40 @@ const Esi: React.FC = () => {
           const monthlySalary = getMonthlySalary(emp);
           const perDayRate = monthlySalary / totalDays;
 
-          const pdPay = fullWorkingDays * perDayRate;
-          const hdPay = half * (perDayRate / 2);
-          const effectiveSundayCount = sundaysInMonth;
-          const sundayPay = effectiveSundayCount * perDayRate;
+          const effectiveSundayCount = sundaysInMonth - sundayAbsentCount;
+          
+          const payableDays = fullWorkingDays + effectiveSundayCount + applicableHolidaysCount + (half * 0.5);
+          const pdPay = Math.round(payableDays * perDayRate);
+          const hdPay = 0; // Merged into pdPay
 
           // OT calculation
           const multiplier = ((emp as any).department === 'Staff' || (emp as any).department?.toLowerCase() === 'staff') ? 1 : 1.5;
           const dynamicOtRate = (perDayRate / 8) * multiplier;
-          const otAmount = (totalOtMinutes / 60) * dynamicOtRate;
+          const otAmount = Math.round((totalOtMinutes / 60) * dynamicOtRate);
 
           // Sunday Allowance logic
           let sundayAllowance = 0;
           if ((emp as any).department === 'Staff' || (emp as any).department?.toLowerCase() === 'staff') {
             sundayAllowance = sundayWorkedCount * 500;
           } else {
-            const hourlyRate = (perDayRate / 8) * 1.5; 
-            sundayAllowance = (sundayOtMinutesForWorkers / 60) * hourlyRate;
+            sundayAllowance = 0; // Worker Sunday hours are now included in normal OT
           }
 
           // Full Month Bonus
-          const fullMonthBonus = present >= adjustedRequiredDays ? 400 : 0;
+          const fullMonthBonus = present >= adjustedRequiredDays ? Math.round(400) : 0;
 
           // Master Special Allowance
           const salary = (emp as any).salary || {};
-          const masterSpecialAllowance = salary.additionalSpecialAllowance || 0;
+          const masterSpecialAllowance = Math.round(salary.additionalSpecialAllowance || 0);
 
           // Total Gross earnings (SAME AS PAYROLL.TSX)
-          // Total Gross = pdPay + Special Allowance + fullMonthBonus + OT + Sunday Pay + Sunday Allowance
-          const totalGrossEarnings = pdPay + hdPay + sundayPay + otAmount + sundayAllowance + masterSpecialAllowance + fullMonthBonus;
+          // Total Gross = pdPay + Special Allowance + fullMonthBonus + OT + Sunday Allowance
+          const totalGrossEarnings = pdPay + hdPay + otAmount + sundayAllowance + masterSpecialAllowance + fullMonthBonus;
 
           // ESI calculation
           const isEligible = isESIApplicable(emp) && monthlySalary <= ESI_THRESHOLD;
           const esiAmount = isEligible && totalGrossEarnings > 0
-            ? Number((totalGrossEarnings * 0.0075).toFixed(2))
+            ? Math.round(totalGrossEarnings * 0.0075)
             : 0;
 
           calculatedEsi[emp.id!] = { totalGrossEarnings, esiAmount };

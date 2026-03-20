@@ -292,15 +292,20 @@ const Pf: React.FC = () => {
           let present = 0;
           let half = 0;
           let sundayWorkedCount = 0;
+          let sundayAbsentCount = 0;
 
           empAtt.forEach((rec) => {
             const recDate = new Date(rec.date);
             const isSundayDate = recDate.getDay() === 0;
 
-            if (isSundayDate && rec.status === 'Present') {
-              sundayWorkedCount++;
-              if (emp.department === 'Staff') {
-                present++;
+            if (isSundayDate) {
+              if (rec.status === 'Absent' || rec.status === 'Leave') {
+                sundayAbsentCount++;
+              } else if (rec.status === 'Present') {
+                sundayWorkedCount++;
+                if (emp.department === 'Staff') {
+                  present++;
+                }
               }
             } else if (!isSundayDate) {
               if (rec.status === 'Present') {
@@ -325,22 +330,22 @@ const Pf: React.FC = () => {
           const adjustedRequiredDays = requiredDaysForFull - applicableHolidaysCount;
           const fullWorkingDays = present >= adjustedRequiredDays ? totalDays : present;
 
-          // Calculate payable days
-          const payableDays = fullWorkingDays + half * 0.5;
-
           // Calculate components
           const monthlySalary = getMonthlySalary(emp);
           const perDayRate = monthlySalary / totalDays;
 
-          const pdPay = fullWorkingDays * perDayRate;
-          const hdPay = half * (perDayRate / 2);
+          const effectiveSundayCount = sundaysInMonth - sundayAbsentCount;
+          
+          const payableDays = fullWorkingDays + effectiveSundayCount + applicableHolidaysCount + (half * 0.5);
+          const pdPay = Math.round(payableDays * perDayRate);
+          const hdPay = 0; // Merged into pdPay
 
           // NEW LOGIC: Basic = P.D Pay / 2
-          const basic = pdPay / 2;
+          const basic = Math.round(pdPay / 2);
           
           // PF calculation (12% of Basic + Conveyance)
           // Since CA is manual, we use the master value as a fallback for PF calculation
-          const masterConveyance = emp.salary?.conveyance || 0;
+          const masterConveyance = Math.round(emp.salary?.conveyance || 0);
           const pfBase = basic + masterConveyance;
           const pfAmt = isPFApplicable(emp) ? Math.round(pfBase * 0.12) : 0;
 

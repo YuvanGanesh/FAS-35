@@ -93,7 +93,7 @@ export default function Otrate() {
                   const monthlySalary = emp.salary?.grossMonthly || emp.salary?.monthlySalary || 0;
                   const oneDaySalary = monthlySalary / daysInMonth;
                   const multiplier = (emp.department === 'Staff' || emp.department?.toLowerCase() === 'staff') ? 1 : 1.5;
-                  const dynamicOtRate = (oneDaySalary / 8) * multiplier;
+                  const dynamicOtRate = Math.round((oneDaySalary / 8) * multiplier);
 
                   return (
                     <tr key={emp.id} className="border-b hover:bg-gray-50">
@@ -111,7 +111,7 @@ export default function Otrate() {
                         {`(₹${monthlySalary.toLocaleString('en-IN', { maximumFractionDigits: 0 })} / ${daysInMonth}) / 8 × ${multiplier}`}
                       </td>
                       <td className="p-3 text-center bg-blue-50 border-l font-bold text-blue-700">
-                        ₹{dynamicOtRate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                        ₹{dynamicOtRate.toLocaleString('en-IN')}
                       </td>
                     </tr>
                   )

@@ -505,7 +505,7 @@ export default function Approved() {
               <th className="px-3 py-2 text-center font-medium text-gray-700">Month</th>
               <th className="px-3 py-2 text-center font-medium text-gray-700">Super Save</th>
               <th className="px-3 py-2 text-center font-medium text-gray-700">Present Days</th>
-              <th className="px-3 py-2 text-center font-medium text-gray-700">Leave + Absent</th>
+              <th className="px-3 py-2 text-center font-medium text-gray-700">Absent</th>
               <th className="px-3 py-2 text-center font-medium text-gray-700">Half Day</th>
               <th className="px-3 py-2 text-center font-medium text-gray-700">OT</th>
               <th className="px-3 py-2 text-center font-medium text-gray-700">Pending</th>
@@ -543,7 +543,7 @@ export default function Approved() {
                     {row.presentDays}
                   </td>
 
-                  {/* Leave + Absent Combined */}
+                  {/* Absent Combined */}
                   <td className="px-3 py-2 text-center font-bold text-red-700 bg-red-50">
                     {row.absentDays}
                   </td>

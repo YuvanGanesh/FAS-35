@@ -597,8 +597,14 @@ const saveEdit = async (date: string) => {
     }
 
     try {
-      // UPDATED: Include absent-day OT in total OT calculation
-      const totalOTIncludingAbsent = records.reduce((s, r) => s + r.otHrs, 0);
+      // UPDATED: Include absent-day OT in total OT calculation and worker Sunday OT
+      const totalOTIncludingAbsent = records.reduce((s, r) => {
+        let ot = r.otHrs;
+        if (new Date(r.date).getDay() === 0 && department !== 'Staff' && r.status === 'Present') {
+          ot = (r.actualWorkHrs || (r.workHrs + r.otHrs));
+        }
+        return s + ot;
+      }, 0);
       
       const superSavePayload = {
         employeeId: employeeFirebaseId,
@@ -684,8 +690,14 @@ const saveEdit = async (date: string) => {
   const halfDay = records.filter(r => r.status === 'Half Day').length;
   const absent = records.filter(r => r.status === 'Absent').length;
   
-  // UPDATED: Total OT now includes OT from ≤4hr days (marked as Absent)
-  const totalOT = records.reduce((s, r) => s + r.otHrs, 0);
+  // UPDATED: Total OT now includes OT from ≤4hr days (marked as Absent) and worker Sunday OT
+  const totalOT = records.reduce((s, r) => {
+    let ot = r.otHrs;
+    if (new Date(r.date).getDay() === 0 && department !== 'Staff' && r.status === 'Present') {
+      ot = (r.actualWorkHrs || (r.workHrs + r.otHrs));
+    }
+    return s + ot;
+  }, 0);
   const totalPending = records.filter(r => r.isMarked).reduce((s, r) => s + r.pendingHrs, 0);
   const netOT = totalOT - totalPending;
   const totalWorkHrs = records.reduce((s, r) => s + r.workHrs, 0);
@@ -843,13 +855,10 @@ const saveEdit = async (date: string) => {
             {department !== 'Staff' && (
               <div className="flex flex-col items-center">
                 <label className="text-xs md:text-sm font-medium text-gray-600 mb-2">
-                  Sunday OT (₹{dynamicOtRate.toFixed(2)}/hr)
+                  Sunday OT Included in Regular OT
                 </label>
-                <div className="text-2xl md:text-3xl font-bold text-green-700">
-                  ₹{sundayOtAmount}
-                </div>
-                <div className="text-xs md:text-sm text-gray-500">
-                  Total hours : {formatHoursToHMM(monthlySummary.sundayOtHours)}
+                <div className="text-sm md:text-base font-semibold text-green-700">
+                  Worker Sunday hours added to main OT pool at ₹{dynamicOtRate.toFixed(2)}/hr
                 </div>
               </div>
             )}
