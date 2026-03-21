@@ -91,6 +91,7 @@ interface AttendanceRecord {
   workHrs?: number;
   totalHours?: number;
   pendingHrs?: number;
+  actualWorkHrs?: number;
 }
 
 interface AttendanceApproval {
@@ -345,15 +346,13 @@ export default function PayrollPreparation() {
               let present = 0;
               let half = 0;
               let leave = 0;
-              let totalOtMinutes = 0;
+              let totalOtHours = 0;
               let totalPendingHours = 0;
               let sundayWorkedCount = 0; // **NEW: Track Sundays worked**
               let sundayAbsentCount = 0; // **NEW: Track absent Sundays**
 
               empAttendance.forEach((rec) => {
-                const isSunday = rec.shiftType === 'sunday' || rec.status === 'Present';
-
-                // **FIX: Check if it's actually a Sunday**
+                // Check if it's actually a Sunday
                 const recDate = new Date(rec.date);
                 const isSundayDate = recDate.getDay() === 0;
 
@@ -367,15 +366,9 @@ export default function PayrollPreparation() {
                     if (emp.department === 'Staff') {
                       // **For Staff: Count as present day**
                       present++;
-                    } else if (emp.department === 'Worker' || emp.department === 'Other Workers') {
-                      // **For Workers: Both workHrs and otHrs on Sunday count as OT**
-                      const wHrs = typeof rec.workHrs === 'number' ? rec.workHrs : 0;
-                      const oHrs = typeof rec.otHrs === 'number' ? rec.otHrs : 0;
-                      const totalSunHrs = typeof rec.totalHours === 'number' ? rec.totalHours : (wHrs + oHrs);
-                      totalOtMinutes += Math.round(totalSunHrs * 60);
                     }
                   }
-                } else if (!isSundayDate) {
+                } else {
                   // **Regular weekday attendance**
                   if (rec.status === 'Present') {
                     present++;
@@ -386,16 +379,22 @@ export default function PayrollPreparation() {
                   }
                 }
 
-                // **OT Hours (excluding Sunday OT for workers)**
-                if (typeof rec.otHrs === 'number' && rec.otHrs > 0 && !isSundayDate) {
-                  totalOtMinutes += Math.round(rec.otHrs * 60);
+                // **Match exact Timesheet OT calculation**
+                let dayOt = typeof rec.otHrs === 'number' ? rec.otHrs : 0;
+                if (isSundayDate && emp.department !== 'Staff' && rec.status === 'Present') {
+                  dayOt = typeof rec.actualWorkHrs === 'number' 
+                    ? rec.actualWorkHrs 
+                    : ((rec.workHrs || 0) + (rec.otHrs || 0));
                 }
+                totalOtHours += dayOt;
 
                 // **Pending Hours**
                 if (typeof rec.pendingHrs === 'number' && rec.pendingHrs > 0) {
                   totalPendingHours += rec.pendingHrs;
                 }
               });
+
+              const totalOtMinutes = Math.round(totalOtHours * 60);
 
               const applicableHolidaysCount = getApplicableHolidaysForEmployee(
                 selectedMonth,
