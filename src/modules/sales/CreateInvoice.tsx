@@ -375,6 +375,10 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
     setSelectedOrder(order)
     setSelectedCustomer(null)
 
+    // Auto-populate Customer PO fields from order
+    setCustomerPONo(order.customerPONo || '')
+    setCustomerPODate(order.customerPODate || '')
+
     // ✅ Filter inventory items matching this order, only okQty > 0
     let orderInventoryItems = inventoryItems.filter(
       (inv: any) => inv.orderId === order.id && Number(inv.okQty || 0) > 0
@@ -1328,20 +1332,6 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
               </div>
 
               <div>
-                <Label>Customer PO No.</Label>
-                <Input value={customerPONo} onChange={(e) => setCustomerPONo(e.target.value)} />
-              </div>
-
-              <div>
-                <Label>Customer PO Date</Label>
-                <Input
-                  type="date"
-                  value={customerPODate}
-                  onChange={(e) => setCustomerPODate(e.target.value)}
-                />
-              </div>
-
-              <div>
                 <Label>Payment Terms</Label>
                 <Input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} />
               </div>
@@ -1645,485 +1635,121 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                     overflow: "hidden",
                   }}
                 >
-                  {/* INVOICE TITLE - Only on first page */}
+                  {/* INVOICE DETAILS & CUSTOMER DETAILS - Only on first page */}
                   {pageIndex === 0 && (
                     <div
                       style={{
-                        textAlign: "center",
-                        padding: "6px 0",
+                        display: "grid",
+                        gridTemplateColumns: "46% 54%",
                         borderBottom: "2px solid #000",
                         background: "#ffffff",
                         flexShrink: 0,
                       }}
                     >
-                      <h2
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: 900,
-                          margin: 0,
-                          letterSpacing: "1px",
-                        }}
-                      >
-                        INVOICE
-                      </h2>
+                      {/* Left Column: Company Details & Billed To */}
+                      <div style={{ borderRight: "2px solid #000", display: "flex", flexDirection: "column" }}>
+                        {/* Company Details */}
+                        <div style={{ padding: "6px 10px", borderBottom: "1px solid #000", flex: 1 }}>
+                          <p style={{ fontSize: "11px", fontWeight: 900, margin: "0 0 4px 0" }}>Fluoro Automation Seals Pvt Ltd</p>
+                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 600 }}>3/180, Rajiv Gandhi Road, Mettukuppam, Chennai Tamil Nadu 600097 India</p>
+                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 600 }}>Phone: 9841175097 | Email: fas@fluoroautomationseals.com</p>
+                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 700 }}>GSTIN/UIN: 33AAECF2716M1ZO</p>
+                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 700 }}>State Name: Tamil Nadu, Code: 33</p>
+                        </div>
+                        {/* Billed To / Buyer */}
+                        <div style={{ padding: "6px 10px", flex: 1.5 }}>
+                          <p style={{ fontSize: "9px", color: "#444", margin: "0 0 2px 0" }}>Buyer (Bill to)</p>
+                          <p style={{ fontSize: "11px", fontWeight: 900, margin: "2px 0" }}>{selectedOrder?.customerName || selectedCustomer?.companyName}</p>
+                          <pre style={{ fontFamily: "Arial, sans-serif", fontSize: "9px", whiteSpace: "pre-wrap", margin: "2px 0", fontWeight: 600, lineHeight: 1.3 }}>{formatAddress(billingAddress)}</pre>
+                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 700 }}>GSTIN/UIN: {selectedOrder?.customerGST || selectedCustomer?.gst}</p>
+                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 700 }}>State Name: {(billingAddress?.state) || (selectedOrder?.customerState) || "Tamil Nadu"}</p>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Invoice Attributes Grid */}
+                      <div style={{ display: "flex", flexDirection: "column", fontSize: "11px" }}>
+                        {/* Row 1 */}
+                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
+                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Invoice No.</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{invoiceNumber}</div>
+                          </div>
+                          <div style={{ flex: 1, padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Dated</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{invoiceDate ? format(new Date(invoiceDate), "dd-MMM-yy") : ""}</div>
+                          </div>
+                        </div>
+                        {/* Row 2 */}
+                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
+                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Delivery Note</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{""}</div>
+                          </div>
+                          <div style={{ flex: 1, padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Mode/Terms of Payment</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{paymentTerms}</div>
+                          </div>
+                        </div>
+                        {/* Row 3 */}
+                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
+                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Reference No. & Date.</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{""}</div>
+                          </div>
+                          <div style={{ flex: 1, padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Other References</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{""}</div>
+                          </div>
+                        </div>
+                        {/* Row 4 */}
+                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
+                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Buyer's Order No.</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{customerPONo}</div>
+                          </div>
+                          <div style={{ flex: 1, padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Dated</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{customerPODate ? format(new Date(customerPODate), "dd-MMM-yy") : ""}</div>
+                          </div>
+                        </div>
+                        {/* Row 5 */}
+                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
+                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Dispatch Doc No.</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{eWayBillNo}</div>
+                          </div>
+                          <div style={{ flex: 1, padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Delivery Note Date</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{eWayBillDate ? format(new Date(eWayBillDate), "dd-MMM-yy") : ""}</div>
+                          </div>
+                        </div>
+                        {/* Row 6 */}
+                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
+                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Dispatched through</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{transportMode}</div>
+                          </div>
+                          <div style={{ flex: 1, padding: "4px 8px" }}>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Destination</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{placeOfSupply}</div>
+                          </div>
+                        </div>
+                        {/* Row 7 */}
+                        <div style={{ display: "flex", padding: "4px 8px", flex: 1 }}>
+                          <div>
+                            <span style={{ color: "#444", fontSize: "10px" }}>Terms of Delivery</span>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{""}</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 
                   {/* Continuation header for pages after first */}
                   {pageIndex > 0 && (
-                    <div
-                      style={{
-                        padding: "8px 16px",
-                        borderBottom: "2px solid #000",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <h3
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 900,
-                          textAlign: "center",
-                          marginBottom: "3px",
-                        }}
-                      >
-                        INVOICE - {invoiceNumber} (Continued)
-                      </h3>
-                      <p
-                        style={{
-                          fontSize: "9px",
-                          textAlign: "center",
-                          color: "#666",
-                          margin: 0,
-                        }}
-                      >
-                        Page {pageIndex + 1} of {totalPages}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* INVOICE DETAILS - Only on first page */}
-                  {pageIndex === 0 && (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        borderBottom: "2px solid #000",
-                        background: "#ffffff",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {/* Left Column */}
-                      <div
-                        style={{
-                          borderRight: "2px solid #000",
-                          padding: "4px 10px",
-                          fontSize: "8px",
-                          background: "#ffffff",
-                        }}
-                      >
-                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                          <tbody>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  width: "55%",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Invoice No:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {invoiceNumber}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Invoice Date:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {invoiceDate
-                                  ? format(new Date(invoiceDate), "dd-MM-yyyy")
-                                  : ""}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Tax Is Payable On Reverse Charge:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                No
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Payment Terms:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {paymentTerms}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Transporter Name:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {transporterName || ""}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                E-Way Bill No:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {eWayBillNo || ""}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                E-Way Bill Date:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {eWayBillDate || ""}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* Right Column */}
-                      <div
-                        style={{
-                          padding: "4px 10px",
-                          fontSize: "8px",
-                          background: "#ffffff",
-                        }}
-                      >
-                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                          <tbody>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  width: "55%",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Transportation Mode:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {transportMode}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Vehicle No.:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {vehicleNo || "NA"}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Date & Time of Supply:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {dateTimeOfSupply
-                                  ? format(new Date(dateTimeOfSupply), "dd-MM-yyyy HH:mm:ss")
-                                  : ""}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Place of Supply:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {placeOfSupply}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Customer PO No:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  borderBottom: "1px solid #dee2e6",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {customerPONo || ""}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Customer PO Date:
-                              </td>
-                              <td
-                                style={{
-                                  padding: "2px 4px",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {customerPODate
-                                  ? format(new Date(customerPODate), "dd-MM-yyyy")
-                                  : ""}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Billed to / Shipped to */}
-                  {pageIndex === 0 && (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        borderBottom: "2px solid #000",
-                        background: "#ffffff",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {/* Billed to */}
-                      <div
-                        style={{
-                          borderRight: "2px solid #000",
-                          padding: "6px 10px",
-                          fontSize: "8px",
-                          background: "#ffffff",
-                        }}
-                      >
-                        <div
-                          style={{
-                            textAlign: "center",
-                            borderBottom: "1px solid #999",
-                            marginBottom: "4px",
-                            paddingBottom: "2px",
-                          }}
-                        >
-                          <strong style={{ fontSize: "9px", fontWeight: 800 }}>
-                            Details of Recipient (Billed to)
-                          </strong>
-                        </div>
-                        <p
-                          style={{
-                            fontWeight: 800,
-                            fontSize: "10px",
-                            margin: "3px 0",
-                            color: "#000",
-                          }}
-                        >
-                          {selectedOrder?.customerName || selectedCustomer?.companyName}
-                        </p>
-                        <pre
-                          style={{
-                            fontFamily: "Arial, sans-serif",
-                            fontSize: "8px",
-                            whiteSpace: "pre-wrap",
-                            margin: "2px 0",
-                            fontWeight: 600,
-                            lineHeight: 1.3,
-                          }}
-                        >
-                          {formatAddress(billingAddress)}
-                        </pre>
-                        <p style={{ margin: "2px 0", fontWeight: 700 }}>
-                          <strong>State Code:</strong>{" "}
-                          {(selectedOrder?.customerGST || selectedCustomer?.gst || "")
-                            .substring(0, 2)}
-                        </p>
-                        <p style={{ margin: "2px 0", fontWeight: 700 }}>
-                          <strong>GSTIN:</strong>{" "}
-                          {selectedOrder?.customerGST || selectedCustomer?.gst}
-                        </p>
-                      </div>
-
-                      {/* Shipped to */}
-                      <div
-                        style={{
-                          padding: "6px 10px",
-                          fontSize: "8px",
-                          background: "#ffffff",
-                        }}
-                      >
-                        <div
-                          style={{
-                            textAlign: "center",
-                            borderBottom: "1px solid #999",
-                            marginBottom: "4px",
-                            paddingBottom: "2px",
-                          }}
-                        >
-                          <strong style={{ fontSize: "9px", fontWeight: 800 }}>
-                            Details of Consignee (Shipped to)
-                          </strong>
-                        </div>
-                        <p
-                          style={{
-                            fontWeight: 800,
-                            fontSize: "10px",
-                            margin: "3px 0",
-                            color: "#000",
-                          }}
-                        >
-                          {selectedOrder?.customerName || selectedCustomer?.companyName}
-                        </p>
-                        <pre
-                          style={{
-                            fontFamily: "Arial, sans-serif",
-                            fontSize: "8px",
-                            whiteSpace: "pre-wrap",
-                            margin: "2px 0",
-                            fontWeight: 600,
-                            lineHeight: 1.3,
-                          }}
-                        >
-                          {formatAddress(shippingAddress)}
-                        </pre>
-                        <p style={{ margin: "2px 0", fontWeight: 700 }}>
-                          <strong>State Code:</strong>{" "}
-                          {(selectedOrder?.customerGST || selectedCustomer?.gst || "")
-                            .substring(0, 2)}
-                        </p>
-                        <p style={{ margin: "2px 0", fontWeight: 700 }}>
-                          <strong>GSTIN:</strong>{" "}
-                          {selectedOrder?.customerGST || selectedCustomer?.gst}
-                        </p>
-                      </div>
+                    <div style={{ padding: "8px 16px", borderBottom: "2px solid #000", flexShrink: 0 }}>
+                      <h3 style={{ fontSize: "13px", fontWeight: 900, textAlign: "center", marginBottom: "3px" }}>INVOICE - {invoiceNumber} (Continued)</h3>
+                      <p style={{ fontSize: "9px", textAlign: "center", color: "#666", margin: 0 }}>Page {pageIndex + 1} of {totalPages}</p>
                     </div>
                   )}
 
@@ -2147,219 +1773,29 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                     >
                       <thead style={{ background: "#ffffff" }}>
                         <tr>
-                          <th
-                            rowSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "center",
-                              width: "2.5%",
-                              fontWeight: 900,
-                            }}
-                          >
-                            S.No
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "4%", fontWeight: 900 }}>
+                            Sl No
                           </th>
-                          <th
-                            rowSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              width: "13%",
-                              fontWeight: 900,
-                            }}
-                          >
-                            Part Code
-                            <br />
-                            Description
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", width: "42%", fontWeight: 900 }}>
+                            Description of Goods and Services
                           </th>
-                          <th
-                            rowSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "center",
-                              width: "5%",
-                              fontWeight: 900,
-                            }}
-                          >
-                            HSN
-                            <br />
-                            SAC
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "10%", fontWeight: 900 }}>
+                            HSN/SAC
                           </th>
-                          <th
-                            rowSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "center",
-                              width: "3.5%",
-                              fontWeight: 900,
-                            }}
-                          >
-                            Qty
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "9%", fontWeight: 900 }}>
+                            Quantity
                           </th>
-                          <th
-                            rowSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "center",
-                              width: "3.5%",
-                              fontWeight: 900,
-                            }}
-                          >
-                            UOM
-                          </th>
-                          <th
-                            rowSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "right",
-                              width: "6%",
-                              fontWeight: 900,
-                            }}
-                          >
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "right", width: "10%", fontWeight: 900 }}>
                             Rate
                           </th>
-                          <th
-                            rowSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "right",
-                              width: "7%",
-                              fontWeight: 900,
-                            }}
-                          >
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "7%", fontWeight: 900 }}>
+                            per
+                          </th>
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "right", width: "6%", fontWeight: 900 }}>
+                            Disc. ₹
+                          </th>
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "right", width: "14%", fontWeight: 900 }}>
                             Amount
-                          </th>
-                          <th
-                            rowSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "right",
-                              width: "4.5%",
-                              fontWeight: 900,
-                            }}
-                          >
-                            Disc
-                          </th>
-                          <th
-                            rowSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "right",
-                              width: "7.5%",
-                              fontWeight: 900,
-                            }}
-                          >
-                            Taxable
-                            <br />
-                            Value
-                          </th>
-                          <th
-                            colSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "center",
-                              fontWeight: 900,
-                            }}
-                          >
-                            CGST
-                          </th>
-                          <th
-                            colSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "center",
-                              fontWeight: 900,
-                            }}
-                          >
-                            SGST/UTGST
-                          </th>
-                          <th
-                            colSpan={2}
-                            style={{
-                              border: "1px solid #000",
-                              padding: "4px 2px",
-                              textAlign: "center",
-                              fontWeight: 900,
-                            }}
-                          >
-                            IGST
-                          </th>
-                        </tr>
-                        <tr>
-                          <th
-                            style={{
-                              border: "1px solid #000",
-                              padding: "2px",
-                              textAlign: "center",
-                              width: "2.5%",
-                              fontWeight: 800,
-                            }}
-                          >
-                            %
-                          </th>
-                          <th
-                            style={{
-                              border: "1px solid #000",
-                              padding: "2px",
-                              textAlign: "right",
-                              width: "5.5%",
-                              fontWeight: 800,
-                            }}
-                          >
-                            Amt
-                          </th>
-                          <th
-                            style={{
-                              border: "1px solid #000",
-                              padding: "2px",
-                              textAlign: "center",
-                              width: "2.5%",
-                              fontWeight: 800,
-                            }}
-                          >
-                            %
-                          </th>
-                          <th
-                            style={{
-                              border: "1px solid #000",
-                              padding: "2px",
-                              textAlign: "right",
-                              width: "5.5%",
-                              fontWeight: 800,
-                            }}
-                          >
-                            Amt
-                          </th>
-                          <th
-                            style={{
-                              border: "1px solid #000",
-                              padding: "2px",
-                              textAlign: "center",
-                              width: "2.5%",
-                              fontWeight: 800,
-                            }}
-                          >
-                            %
-                          </th>
-                          <th
-                            style={{
-                              border: "1px solid #000",
-                              padding: "2px",
-                              textAlign: "right",
-                              width: "5.5%",
-                              fontWeight: 800,
-                            }}
-                          >
-                            Amt
                           </th>
                         </tr>
                       </thead>
@@ -2368,165 +1804,31 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                           const globalIndex = pageIndex * ITEMS_PER_PAGE + i
                           return (
                             <tr key={i} style={{ background: "#ffffff" }}>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 2px",
-                                  textAlign: "center",
-                                  fontWeight: 700,
-                                }}
-                              >
+                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 700 }}>
                                 {globalIndex + 1}
                               </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 4px",
-                                  fontSize: "7.5px",
-                                  lineHeight: 1.2,
-                                }}
-                              >
+                              <td style={{ border: "1px solid #000", padding: "3px 4px", fontSize: "8.5px", lineHeight: 1.3 }}>
                                 <div style={{ fontWeight: 800 }}>{item.partCode}</div>
-                                <div
-                                  style={{
-                                    fontSize: "7px",
-                                    color: "#333",
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {item.description}
-                                </div>
+                                <div style={{ fontSize: "8px", color: "#222", fontWeight: 600 }}>{item.description}</div>
                               </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 2px",
-                                  textAlign: "center",
-                                  fontWeight: 700,
-                                }}
-                              >
+                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 700 }}>
                                 {item.hsnCode}
                               </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 2px",
-                                  textAlign: "center",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {item.invoicedQty}
+                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 800 }}>
+                                <span style={{ marginRight: '4px' }}>{item.invoicedQty}</span>
+                                <span style={{ fontSize: '7px' }}>{item.uom}</span>
                               </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 2px",
-                                  textAlign: "center",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {item.uom}
-                              </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 4px",
-                                  textAlign: "right",
-                                  fontWeight: 700,
-                                }}
-                              >
+                              <td style={{ border: "1px solid #000", padding: "3px 4px", textAlign: "right", fontWeight: 700 }}>
                                 {formatAmount(item.rate)}
                               </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 4px",
-                                  textAlign: "right",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {formatAmount(item.amount)}
+                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 700 }}>
+                                {item.uom}
                               </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 4px",
-                                  textAlign: "right",
-                                  fontWeight: 700,
-                                }}
-                              >
+                              <td style={{ border: "1px solid #000", padding: "3px 4px", textAlign: "right", fontWeight: 700 }}>
                                 {formatAmount(item.discount)}
                               </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 4px",
-                                  textAlign: "right",
-                                  fontWeight: 900,
-                                  background: "#ffffff",
-                                }}
-                              >
+                              <td style={{ border: "1px solid #000", padding: "3px 4px", textAlign: "right", fontWeight: 900, background: "#ffffff" }}>
                                 {formatAmount(item.taxableValue)}
-                              </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 2px",
-                                  textAlign: "center",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {applyCGST ? item.cgstPercent.toFixed(1) : "0.0"}
-                              </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 4px",
-                                  textAlign: "right",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {formatAmount(item.cgstAmount)}
-                              </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 2px",
-                                  textAlign: "center",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {applySGST ? item.sgstPercent.toFixed(1) : "0.0"}
-                              </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 4px",
-                                  textAlign: "right",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {formatAmount(item.sgstAmount)}
-                              </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 2px",
-                                  textAlign: "center",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {applyIGST ? item.igstPercent.toFixed(1) : "0.0"}
-                              </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "3px 4px",
-                                  textAlign: "right",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {formatAmount(item.igstAmount)}
                               </td>
                             </tr>
                           )
@@ -2550,292 +1852,113 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                         >
                           <tbody>
                             <tr style={{ fontWeight: 900, background: "#ffffff" }}>
-                              <td
-                                colSpan={6}
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "4px 6px",
-                                  textAlign: "right",
-                                  fontSize: "9px",
-                                  width: "33.5%",
-                                }}
-                              >
-                                TOTAL
+                              <td colSpan={3} style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "right", fontSize: "10px" }}>
+                                Total
                               </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "4px 6px",
-                                  textAlign: "right",
-                                  fontSize: "9px",
-                                  width: "7%",
-                                }}
-                              >
-                                {formatAmount(lineItems.reduce((s, i) => s + i.amount, 0))}
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "center", fontSize: "10px" }}>
+                                {lineItems.reduce((s, i) => s + i.invoicedQty, 0)} {lineItems[0]?.uom || ""}
                               </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "4px 6px",
-                                  textAlign: "right",
-                                  fontSize: "9px",
-                                  width: "4.5%",
-                                }}
-                              >
-                                {formatAmount(lineItems.reduce((s, i) => s + i.discount, 0))}
+                              <td colSpan={3} style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "right", fontSize: "10px" }}>
                               </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "4px 6px",
-                                  textAlign: "right",
-                                  fontSize: "9px",
-                                  width: "7.5%",
-                                }}
-                              >
-                                {formatAmount(lineItems.reduce((s, i) => s + i.taxableValue, 0))}
-                              </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "4px 2px",
-                                  width: "2.5%",
-                                }}
-                              ></td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "4px 6px",
-                                  textAlign: "right",
-                                  fontSize: "9px",
-                                  width: "5.5%",
-                                }}
-                              >
-                                {formatAmount(lineItems.reduce((s, i) => s + i.cgstAmount, 0))}
-                              </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "4px 2px",
-                                  width: "2.5%",
-                                }}
-                              ></td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "4px 6px",
-                                  textAlign: "right",
-                                  fontSize: "9px",
-                                  width: "5.5%",
-                                }}
-                              >
-                                {formatAmount(lineItems.reduce((s, i) => s + i.sgstAmount, 0))}
-                              </td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "4px 2px",
-                                  width: "2.5%",
-                                }}
-                              ></td>
-                              <td
-                                style={{
-                                  border: "1px solid #000",
-                                  padding: "4px 6px",
-                                  textAlign: "right",
-                                  fontSize: "9px",
-                                  width: "5.5%",
-                                }}
-                              >
-                                {formatAmount(lineItems.reduce((s, i) => s + i.igstAmount, 0))}
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "right", fontSize: "10px" }}>
+                                {symbol}{formatAmount(lineItems.reduce((s, i) => s + i.taxableValue, 0))}
                               </td>
                             </tr>
                           </tbody>
                         </table>
                       </div>
 
-                      {/* SUMMARY SECTION */}
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          borderTop: "2px solid #000",
-                          background: "#ffffff",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <div
-                          style={{
-                            borderRight: "2px solid #000",
-                            padding: "6px 10px",
-                            fontSize: "9px",
-                            fontWeight: 700,
-                          }}
-                        >
-                          <p style={{ margin: "2px 0" }}>
-                            <strong style={{ fontWeight: 900 }}>Items Total:</strong> {symbol}
-                            {formatAmount(lineItems.reduce((s, i) => s + i.taxableValue, 0))}
-                          </p>
-                          <p style={{ margin: "2px 0" }}>
-                            <strong style={{ fontWeight: 900 }}>Transport Charge:</strong> {symbol}
-                            {formatAmount(calculatedTransportCharge)}
-                          </p>
-                          <p
-                            style={{
-                              margin: "2px 0",
-                              borderTop: "1px solid #ccc",
-                              paddingTop: "2px",
-                            }}
-                          >
-                            <strong style={{ fontWeight: 900 }}>Taxable Amount:</strong> {symbol}
-                            {formatAmount(taxable)}
-                          </p>
-                          {applyCGST && cgst > 0 && (
-                            <p style={{ margin: "2px 0", color: "#0066cc" }}>
-                              <strong style={{ fontWeight: 900 }}>CGST ({cgstPercent}%):</strong>{" "}
-                              {symbol}
-                              {formatAmount(cgst)}
-                            </p>
-                          )}
-                          {applySGST && sgst > 0 && (
-                            <p style={{ margin: "2px 0", color: "#0066cc" }}>
-                              <strong style={{ fontWeight: 900 }}>SGST ({sgstPercent}%):</strong>{" "}
-                              {symbol}
-                              {formatAmount(sgst)}
-                            </p>
-                          )}
-                          {applyIGST && igst > 0 && (
-                            <p style={{ margin: "2px 0", color: "#0066cc" }}>
-                              <strong style={{ fontWeight: 900 }}>IGST ({igstPercent}%):</strong>{" "}
-                              {symbol}
-                              {formatAmount(igst)}
-                            </p>
-                          )}
-                          <p style={{ margin: "2px 0" }}>
-                            <strong style={{ fontWeight: 900 }}>Round Off:</strong> ₹0.00
-                          </p>
+                      {/* TAX BREAKUP TABLE (HSN/SAC वाइज) */}
+                      <div style={{ borderTop: "2px solid #000", background: "#ffffff", flexShrink: 0 }}>
+                        <div style={{ padding: "4px 8px", fontSize: "9px", display: "flex", justifyContent: "space-between" }}>
+                          <div>
+                            <span>Amount Chargeable (in words)</span><br />
+                            <strong style={{ fontWeight: 900 }}>INR {amountInWords} Only</strong>
+                          </div>
+                          <div style={{ textAlign: "right", fontStyle: "italic", fontSize: "8px", color: "#666" }}>
+                            E. & O.E
+                          </div>
                         </div>
 
-                        <div
-                          style={{
-                            padding: "6px 10px",
-                            fontSize: "9px",
-                            textAlign: "right",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "flex-end",
-                          }}
-                        >
-                          <p
-                            style={{
-                              fontSize: "12px",
-                              fontWeight: 900,
-                              margin: "2px 0",
-                              color: "#000",
-                            }}
-                          >
-                            Grand Total: {symbol}
-                            {formatAmount(total)}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* AMOUNT IN WORDS */}
-                      {currency === "INR" && (
-                        <div
-                          style={{
-                            borderTop: "2px solid #000",
-                            padding: "6px 10px",
-                            fontSize: "9px",
-                            fontWeight: 700,
-                            background: "#ffffff",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <strong style={{ fontWeight: 900 }}>Amount in Words:</strong>{" "}
-                          {amountInWords}
-                        </div>
-                      )}
-
-                      {/* E-WAY BILL */}
-                      {eWayBillNo && eWayBillDate && (
-                        <div
-                          style={{
-                            borderTop: "2px solid #000",
-                            padding: "6px 10px",
-                            fontSize: "9px",
-                            fontWeight: 700,
-                            background: "#ffffff",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <strong style={{ fontWeight: 900 }}>
-                            Electronic Reference Number (E-Way Bill):
-                          </strong>{" "}
-                          {eWayBillNo}
-                          <span style={{ marginLeft: "20px", fontWeight: 900 }}>
-                            <strong>Date:</strong> {format(new Date(eWayBillDate), "dd-MM-yyyy")}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* TERMS & SIGNATURE */}
-                      <div
-                        style={{
-                          borderTop: "2px solid #000",
-                          padding: "8px 10px",
-                          fontSize: "8px",
-                          background: "#ffffff",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <p style={{ margin: "2px 0", fontWeight: 800 }}>
-                          <strong>TERM & CONDITION OF SALES</strong>
-                        </p>
-                        <p
-                          style={{
-                            margin: "16px 0 4px",
-                            textAlign: "center",
-                            fontSize: "9px",
-                            fontWeight: 700,
-                          }}
-                        >
-                          Certified that the Particulars given above are true and correct
-                        </p>
-                        <p
-                          style={{
-                            margin: "20px 0 4px",
-                            textAlign: "right",
-                            fontSize: "9px",
-                            fontWeight: 900,
-                          }}
-                        >
-                          For Fluoro Automation Seals Pvt Ltd
-                        </p>
-                        <div style={{ marginTop: "28px", textAlign: "right" }}>
-                          <p
-                            style={{
-                              fontSize: "9px",
-                              fontWeight: 900,
-                              borderTop: "1px solid #000",
-                              display: "inline-block",
-                              paddingTop: "4px",
-                              paddingRight: "50px",
-                            }}
-                          >
-                            Authorized Signatory
-                          </p>
-                        </div>
-
-                        <div style={{ marginTop: "8px" }}>
-                          <table style={{ width: "100%", fontSize: "8px" }}>
-                            <tbody>
+                        <div style={{ borderTop: "1px solid #000" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8px", background: "#ffffff" }}>
+                            <thead style={{ borderBottom: "1px solid #000" }}>
                               <tr>
-                                <td style={{ padding: "2px", fontWeight: 700 }}>Name:</td>
-                                <td style={{ padding: "2px", fontWeight: 700 }}>Designation:</td>
+                                <th rowSpan={2} style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "left", width: "40%", fontWeight: 900 }}>HSN/SAC</th>
+                                <th rowSpan={2} style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right", width: "15%", fontWeight: 900 }}>Taxable Value</th>
+                                {applyCGST && <th colSpan={2} style={{ borderRight: "1px solid #000", borderBottom: '1px solid #000', padding: "4px", textAlign: "center", fontWeight: 900 }}>Central Tax</th>}
+                                {applySGST && <th colSpan={2} style={{ borderRight: "1px solid #000", borderBottom: '1px solid #000', padding: "4px", textAlign: "center", fontWeight: 900 }}>State Tax</th>}
+                                {applyIGST && <th colSpan={2} style={{ borderRight: "1px solid #000", borderBottom: '1px solid #000', padding: "4px", textAlign: "center", fontWeight: 900 }}>Integrated Tax</th>}
+                                <th rowSpan={2} style={{ padding: "4px", textAlign: "right", width: "15%", fontWeight: 900 }}>Total Tax Amount</th>
+                              </tr>
+                              <tr>
+                                {applyCGST && <><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "center" }}>Rate</th><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "right" }}>Amount</th></>}
+                                {applySGST && <><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "center" }}>Rate</th><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "right" }}>Amount</th></>}
+                                {applyIGST && <><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "center" }}>Rate</th><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "right" }}>Amount</th></>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {lineItems.map((item, i) => {
+                                const itemTaxTotal = (applyCGST ? item.cgstAmount : 0) + (applySGST ? item.sgstAmount : 0) + (applyIGST ? item.igstAmount : 0);
+                                if (itemTaxTotal === 0) return null;
+                                return (
+                                  <tr key={i}>
+                                    <td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "left" }}>{item.hsnCode || "-"}</td>
+                                    <td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.taxableValue)}</td>
+                                    {applyCGST && <><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "center" }}>{item.cgstPercent.toFixed(1)}%</td><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.cgstAmount)}</td></>}
+                                    {applySGST && <><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "center" }}>{item.sgstPercent.toFixed(1)}%</td><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.sgstAmount)}</td></>}
+                                    {applyIGST && <><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "center" }}>{item.igstPercent.toFixed(1)}%</td><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.igstAmount)}</td></>}
+                                    <td style={{ padding: "2px 4px", textAlign: "right" }}>{formatAmount(itemTaxTotal)}</td>
+                                  </tr>
+                                );
+                              })}
+                              <tr style={{ borderTop: "1px solid #000", fontWeight: 900 }}>
+                                <td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>Total</td>
+                                <td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(taxable)}</td>
+                                {applyCGST && <><td style={{ borderRight: "1px solid #000", padding: "4px" }}></td><td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(cgst)}</td></>}
+                                {applySGST && <><td style={{ borderRight: "1px solid #000", padding: "4px" }}></td><td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(sgst)}</td></>}
+                                {applyIGST && <><td style={{ borderRight: "1px solid #000", padding: "4px" }}></td><td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(igst)}</td></>}
+                                <td style={{ padding: "4px", textAlign: "right" }}>{formatAmount((applyCGST ? cgst : 0) + (applySGST ? sgst : 0) + (applyIGST ? igst : 0))}</td>
                               </tr>
                             </tbody>
                           </table>
+                        </div>
+                      </div>
+
+                      {/* TAX AMOUNT IN WORDS */}
+                      <div style={{ borderTop: "1px solid #000", padding: "4px 8px", fontSize: "9px" }}>
+                        <span style={{ fontSize: "8px" }}>Tax Amount (in digits) :</span><br />
+                        <strong style={{ fontWeight: 900 }}>INR {formatAmount((applyCGST ? cgst : 0) + (applySGST ? sgst : 0) + (applyIGST ? igst : 0))}</strong>
+                      </div>
+
+                      {/* BOTTOM PAN, BANK, SIGNATURE */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: "1px solid #000", background: "#ffffff", flexShrink: 0 }}>
+                        <div style={{ borderRight: "1px solid #000", padding: "6px 8px", fontSize: "9px" }}>
+                          <p style={{ margin: "0 0 4px 0" }}>
+                            Company's PAN: <strong style={{ fontWeight: 900 }}>{selectedOrder?.companyPAN || "AAACF3485R"}</strong>
+                          </p>
+                          <div style={{ marginTop: "10px" }}>
+                            <p style={{ margin: "0 0 2px 0", textDecoration: "underline", fontWeight: 700 }}>Declaration</p>
+                            <p style={{ margin: 0, lineHeight: 1.4, fontStyle: "italic", fontSize: "8px" }}>
+                              We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+                            </p>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", fontSize: "9px" }}>
+                          <div style={{ padding: "6px 8px", borderBottom: "1px solid #000", flex: 1 }}>
+                            <p style={{ margin: "0 0 2px 0", textDecoration: "underline", fontWeight: 700 }}>Company's Bank Details</p>
+                            <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: "2px", fontWeight: 600 }}>
+                              <div>Bank Name</div><div>: <strong>HDFC Bank Ltd</strong></div>
+                              <div>A/c No.</div><div>: <strong>50200021300057</strong></div>
+                              <div>Branch & IFS Code</div><div>: <strong>Mettukuppam & HDFC0001000</strong></div>
+                            </div>
+                          </div>
+                          <div style={{ padding: "6px 8px", textAlign: "right", display: "flex", flexDirection: "column", justifyContent: "space-between", height: "80px" }}>
+                            <p style={{ margin: 0, fontWeight: 900 }}>for Fluoro Automation Seals Pvt Ltd</p>
+                            <div style={{ marginTop: "auto" }}>
+                              <p style={{ margin: 0, fontWeight: 700, fontSize: "8px" }}>Authorised Signatory</p>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </>

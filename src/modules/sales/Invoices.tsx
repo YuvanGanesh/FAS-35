@@ -966,52 +966,44 @@ const InvoicePreviewModal = ({ invoice, onClose }: { invoice: any; onClose: () =
 
     setIsDownloading(true)
     try {
-      const element = printRef.current
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff",
-        width: 1122,
-        height: element.scrollHeight,
-        windowWidth: 1122,
-      })
-
-      const imgData = canvas.toDataURL("image/png")
-
-      // Always landscape — template is A4 landscape (1122px wide)
+      const parentElement = printRef.current;
+      const pages = parentElement.querySelectorAll('.page-break');
+      
       const pdf = new jsPDF({
         orientation: "landscape",
         unit: "mm",
         format: "a4",
-      })
+      });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth()   // 297mm
-      const pdfHeight = pdf.internal.pageSize.getHeight() // 210mm
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      if (pages && pages.length > 0) {
+        for (let i = 0; i < pages.length; i++) {
+          const pageEl = pages[i];
+          const canvas = await html2canvas(pageEl, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: "#ffffff",
+          });
 
-      // Scale the canvas image to fit the PDF width
-      const imgScaledHeight = (canvas.height * pdfWidth) / canvas.width
-
-      if (imgScaledHeight <= pdfHeight) {
-        // Fits on one page
-        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, imgScaledHeight)
-      } else {
-        // Multi-page: slice the image across pages
-        let yOffset = 0
-        while (yOffset < imgScaledHeight) {
-          if (yOffset > 0) pdf.addPage()
-          pdf.addImage(imgData, "PNG", 0, -yOffset, pdfWidth, imgScaledHeight)
-          yOffset += pdfHeight
+          const imgData = canvas.toDataURL("image/png");
+          if (i > 0) pdf.addPage();
+          
+          const ratio = pdfWidth / canvas.width;
+          const imgScaledHeight = canvas.height * ratio;
+          pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, imgScaledHeight);
         }
+        pdf.save(`Invoice_${invoice.invoiceNumber}.pdf`);
       }
-
-      pdf.save(`Invoice_${invoice.invoiceNumber}.pdf`)
-      toast.success("Invoice downloaded successfully!")
+      
+      toast.success("Invoice downloaded successfully!");
     } catch (err) {
-      console.error("PDF generation error:", err)
-      toast.error("Failed to download PDF")
+      console.error("PDF generation error:", err);
+      toast.error("Failed to download PDF");
     } finally {
-      setIsDownloading(false)
+      setIsDownloading(false);
     }
   }
 

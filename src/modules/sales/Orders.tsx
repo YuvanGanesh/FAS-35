@@ -155,6 +155,8 @@ interface SalesOrder {
   soDate: string;
   soTimestamp: number;
   deliveryDate?: string;
+  customerPONo?: string;
+  customerPODate?: string;
   paymentTerms?: string;
   dispatchMode?: string;
   instructions?: string;
@@ -1211,6 +1213,8 @@ export default function SalesOrders() {
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
   const [selectedQuotationId, setSelectedQuotationId] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
+  const [customerPONo, setCustomerPONo] = useState('');
+  const [customerPODate, setCustomerPODate] = useState('');
   const [instructions, setInstructions] = useState('');
   const [soNumber, setSoNumber] = useState('');
 
@@ -1225,6 +1229,8 @@ export default function SalesOrders() {
   const [manualPaymentTerms, setManualPaymentTerms] = useState('');
   const [manualDispatchMode, setManualDispatchMode] = useState('');
   const [manualDeliveryDate, setManualDeliveryDate] = useState('');
+  const [manualCustomerPONo, setManualCustomerPONo] = useState('');
+  const [manualCustomerPODate, setManualCustomerPODate] = useState('');
   const [manualInstructions, setManualInstructions] = useState('');
   const [manualItems, setManualItems] = useState<ManualOrderItem[]>([]);
 
@@ -1305,6 +1311,8 @@ export default function SalesOrders() {
       soDate: raw.soDate || new Date(raw.createdAt || Date.now()).toISOString().split('T')[0],
       soTimestamp: raw.soTimestamp || raw.createdAt || Date.now(),
       deliveryDate: raw.deliveryDate || '',
+      customerPONo: raw.customerPONo || '',
+      customerPODate: raw.customerPODate || '',
       paymentTerms: raw.paymentTerms || '',
       dispatchMode: raw.dispatchMode || '',
       instructions: raw.instructions || '',
@@ -1572,6 +1580,8 @@ export default function SalesOrders() {
         soDate: todayISO,
         soTimestamp: now,
         deliveryDate: deliveryDate || selectedQuotation.deliveryTerm || todayISO,
+        customerPONo: customerPONo,
+        customerPODate: customerPODate,
         paymentTerms: selectedQuotation.paymentTerms || '',
         dispatchMode: selectedQuotation.modeOfDispatch || selectedQuotation.dispatchMode || '',
         instructions,
@@ -1630,6 +1640,8 @@ export default function SalesOrders() {
         soDate: todayISO,
         soTimestamp: now,
         deliveryDate: manualDeliveryDate || todayISO,
+        customerPONo: manualCustomerPONo,
+        customerPODate: manualCustomerPODate,
         paymentTerms: manualPaymentTerms,
         dispatchMode: manualDispatchMode,
         instructions: manualInstructions,
@@ -1770,6 +1782,8 @@ export default function SalesOrders() {
   const resetForm = () => {
     setSelectedQuotationId('');
     setDeliveryDate('');
+    setCustomerPONo('');
+    setCustomerPODate('');
     setInstructions('');
     setSoNumber('');
     setSelectedOrder(null);
@@ -1779,6 +1793,8 @@ export default function SalesOrders() {
     setManualPaymentTerms('');
     setManualDispatchMode('');
     setManualDeliveryDate('');
+    setManualCustomerPONo('');
+    setManualCustomerPODate('');
     setManualInstructions('');
     setManualItems([]);
     setManualCgstPercent(undefined);
@@ -2140,12 +2156,19 @@ export default function SalesOrders() {
                     </>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label>Delivery Date</Label>
                       <Input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
                     </div>
-                    <div></div>
+                    <div>
+                      <Label>Customer PO No.</Label>
+                      <Input value={customerPONo} onChange={(e) => setCustomerPONo(e.target.value)} placeholder="Enter Customer PO No." />
+                    </div>
+                    <div>
+                      <Label>Customer PO Date</Label>
+                      <Input type="date" value={customerPODate} onChange={(e) => setCustomerPODate(e.target.value)} />
+                    </div>
                   </div>
 
                   <div>
@@ -2206,9 +2229,19 @@ export default function SalesOrders() {
                     </div>
                   </div>
 
-                  <div>
-                    <Label>Delivery Date</Label>
-                    <Input type="date" value={manualDeliveryDate} onChange={(e) => setManualDeliveryDate(e.target.value)} />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label>Delivery Date</Label>
+                      <Input type="date" value={manualDeliveryDate} onChange={(e) => setManualDeliveryDate(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label>Customer PO No.</Label>
+                      <Input value={manualCustomerPONo} onChange={(e) => setManualCustomerPONo(e.target.value)} placeholder="Enter Customer PO No." />
+                    </div>
+                    <div>
+                      <Label>Customer PO Date</Label>
+                      <Input type="date" value={manualCustomerPODate} onChange={(e) => setManualCustomerPODate(e.target.value)} />
+                    </div>
                   </div>
 
                   {manualCurrency === 'INR' &&
