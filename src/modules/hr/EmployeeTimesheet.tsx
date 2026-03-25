@@ -131,8 +131,11 @@ const calculateWorkHours = (
 ) => {
   const config = SHIFT_CONFIGS[shiftType];
 
-  // If already marked as Holiday or Select, return zeros
+  // If already marked as Holiday, Select, or Absent, return zeros (no pending for absent)
   if (status && ['Holiday', 'Select'].includes(status)) {
+    return { workHrs: 0, otHrs: 0, pendingHrs: 0, actualWorkHrs: 0, autoStatus: null };
+  }
+  if (status === 'Absent') {
     return { workHrs: 0, otHrs: 0, pendingHrs: 0, actualWorkHrs: 0, autoStatus: null };
   }
 
@@ -183,11 +186,11 @@ const calculateWorkHours = (
   let pendingHrs = 0;
   
   if (net <= 4) {
-    // Working hours ≤ 4 = Absent, all hours become OT
+    // Working hours ≤ 4 = Absent, all hours become OT, no pending
     autoStatus = 'Absent';
     workHrs = 0;
     otHrs = net; // All worked hours count as OT
-    pendingHrs = target; // Full day pending
+    pendingHrs = 0; // Absent days have no pending hours
   } else {
     // Normal calculation for > 4 hours
     workHrs = Math.min(net, target);
@@ -424,9 +427,9 @@ export default function EmployeeTimesheet() {
     const isSunday = new Date(rec.date).getDay() === 0;
 
     const parseTime = (timeStr?: string) => {
-      if (!timeStr) return { hour: '', minute: '', period: 'AM' };
+      if (!timeStr) return { hour: '', minute: '', period: '' };
       const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-      if (!match) return { hour: '', minute: '', period: 'AM' };
+      if (!match) return { hour: '', minute: '', period: '' };
       return {
         hour: match[1].padStart(2, '0'),
         minute: match[2],
@@ -446,7 +449,7 @@ export default function EmployeeTimesheet() {
         shiftType: rec.shiftType || (isSunday ? 'sunday' : 'day'),
         checkInHour: checkInParsed.hour,
         checkInMinute: checkInParsed.minute,
-        checkInPeriod: checkInParsed.period,
+        checkInPeriod: checkInParsed.period || 'AM',
         lunchInHour: lunchInParsed.hour || '01',
         lunchInMinute: lunchInParsed.minute || '00',
         lunchInPeriod: lunchInParsed.period || 'PM',
@@ -673,9 +676,9 @@ const saveEdit = async (date: string) => {
         LTimeout: lOut || 0,
         BHrs: bHrs,
         ABHrs: abHrs,
-        WorkHrs: Number(r.workHrs.toFixed(2)),
+        WorkHrs: abHrs,  // WorkHrs = ABHrs (actual hours minus lunch break)
         OTHrs: Number(r.otHrs.toFixed(2)),
-        Pending: Number(r.pendingHrs.toFixed(2)),
+        Pending: r.status === 'Absent' ? 0 : Number(r.pendingHrs.toFixed(2)),
       };
     });
 
@@ -824,10 +827,10 @@ const saveEdit = async (date: string) => {
         </Card>
         <Card className="text-center bg-emerald-50">
           <CardContent className="pt-4 md:pt-6 p-2 md:p-6">
-            <div className="text-xl md:text-3xl font-bold text-emerald-700">
-              {netOT > 0 ? formatHoursToHMM(netOT) : '0:00'}
+            <div className={`text-xl md:text-3xl font-bold ${netOT >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+              {formatHoursToHMM(netOT)}
             </div>
-            <div className="text-xs md:text-sm">Net OT</div>
+            <div className="text-xs md:text-sm">Net OT (OT - Pending)</div>
           </CardContent>
         </Card>
         <Card className="text-center bg-indigo-50">

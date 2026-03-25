@@ -1,1447 +1,1930 @@
-// modules/sales/CreateQuotation.tsx
-import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+"use client"
+import { useState, useEffect, useRef } from "react"
+import { useParams, useNavigate } from "react-router-dom"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Download, ArrowLeft, Trash2 } from "lucide-react"
+import { toast } from "sonner"
+import { format } from "date-fns"
+import html2canvas from "html2canvas"
+import jsPDF from "jspdf"
 import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import  QuotationPrintTemplate  from "@/components/QuotationPrintTemplate";
-import {
-  Plus, Trash2, Download, ArrowLeft, Ruler,
-  UserPlus, Edit, Copy, Check, Globe, Building2,
-} from "lucide-react";
-import { toast } from "sonner";
-import { Customer, Product } from "@/types";
-import {
-  createRecord, getAllRecords, getRecordById, updateRecord,
-} from "@/services/firebase";
-import html2pdf from "html2pdf.js";
-import { nanoid } from "nanoid";
+  createRecord,
+  getAllRecords,
+  getRecord,
+  updateRecord,
+  deleteRecord,
+} from "@/services/firebase"
+import fas from "./fas.png"
+import { getFormattedCustomerAddress } from "@/utils/addressUtils"
 
-// Exchange rates: 1 foreign currency unit = X INR (Dec 2025)
-const EXCHANGE_RATES: Record<string, number> = {
-  INR: 1, USD: 85.50, EUR: 92.00, GBP: 108.00, AED: 23.30,
-};
-
-const indianStates = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
-  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
-  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
-  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
-  "Delhi", "Jammu and Kashmir", "Ladakh",
-];
-
-const currencies = [
-  { code: "INR", symbol: "₹", name: "Indian Rupee" },
-  { code: "USD", symbol: "$", name: "US Dollar" },
-  { code: "EUR", symbol: "€", name: "Euro" },
-  { code: "GBP", symbol: "£", name: "British Pound" },
-  { code: "AED", symbol: "د.إ", name: "UAE Dirham" },
-];
-
-interface Address {
-  id: string;
-  type: "billing" | "shipping";
-  label: string;
-  street: string;
-  area?: string;
-  city: string;
-  state: string;
-  pincode: string;
-  country: string;
-  isDefault?: boolean;
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  INR: "₹",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  AED: "د.إ",
 }
 
-interface Branch {
-  id: string;
-  branchName: string;
-  branchCode: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  state: string;
-  pincode: string;
-  country: string;
-  isHeadOffice?: boolean;
-}
+const ITEMS_PER_PAGE = 8
 
 interface LineItem {
-  sNo: number;
-  productCode: string;
-  sku?: string | null;
-  productDescription: string;
-  hsnCode: string;
-  uom: string;
-  qty: number;
-  unitRate: number;
-  amount: number;
-  discount: number;
-  netAmount: number;
-  size?: string;
+  sNo: number
+  partCode: string
+  description: string
+  hsnCode: string
+  availableStock?: number
+  invoicedQty: number
+  uom: string
+  rate: number
+  amount: number
+  discount: number
+  discountPercent: number
+  cgstPercent: number
+  sgstPercent: number
+  igstPercent: number
+  cgstAmount: number
+  sgstAmount: number
+  igstAmount: number
+  taxableValue: number
+  fgIds?: string
+  // ✅ NEW: to track inventory record id for real-time deduction
+  inventoryId?: string
 }
 
-interface CustomerData {
-  id?: string;
-  customerCode: string;
-  companyName: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  currency: string;
-  gst?: string;
-  pan?: string;
-  cin?: string;
-  addresses: Address[];
-  branches?: Branch[];
-  bankName?: string;
-  bankAccountNo?: string;
-  bankIfsc?: string;
-  bankBranch?: string;
-}
+export default function CreateInvoice() {
+  const { id } = useParams<{ id?: string }>()
+  const navigate = useNavigate()
+  const printRef = useRef<HTMLDivElement>(null)
 
-interface ProductItem {
-  productCode: string;
-  category: string;
-  group: string;
-  type: string;
-  hsn: string;
-  unit: string;
-  unitPrice: number;
-  stockQty: number;
-  size?: {
-    height?: number; heightUnit?: string;
-    width?: number; widthUnit?: string;
-    length?: number; lengthUnit?: string;
-    weight?: number; weightUnit?: string;
-  };
-}
+  const urlParams = new URLSearchParams(window.location.search)
+  const isDuplicateMode = urlParams.get("duplicate") === "true"
+  const isEditMode = !!id && !isDuplicateMode
+  const autoOrderId = urlParams.get("orderId") || ""
 
-interface ProductGroup {
-  id: string;
-  name: string;
-  items: ProductItem[];
-  createdAt: number;
-}
+  // Form States
+  const [mode, setMode] = useState<"order" | "direct" | "rawmaterial">("order")
+  const [invoiceNumber, setInvoiceNumber] = useState("")
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0])
+  const [transportMode, setTransportMode] = useState("Courier")
+  const [transporterName, setTransporterName] = useState("")
+  const [vehicleNo, setVehicleNo] = useState("")
+  const [dateTimeOfSupply, setDateTimeOfSupply] = useState(new Date().toISOString().slice(0, 16))
+  const [placeOfSupply, setPlaceOfSupply] = useState("Tamil Nadu")
+  const [customerPONo, setCustomerPONo] = useState("")
+  const [customerPODate, setCustomerPODate] = useState("")
+  const [paymentTerms, setPaymentTerms] = useState("30 Days")
+  const [eWayBillNo, setEWayBillNo] = useState("")
+  const [eWayBillDate, setEWayBillDate] = useState("")
+  const [remarks, setRemarks] = useState("")
 
-const initialAddressForm: Omit<Address, "id"> = {
-  type: "billing",
-  label: "Head Office",
-  street: "",
-  area: "",
-  city: "",
-  state: "Tamil Nadu",
-  pincode: "",
-  country: "India",
-  isDefault: true,
-};
+  // ✅ FIXED: Tax States - Initialize with DEFAULT values
+  const [applyCGST, setApplyCGST] = useState(true)
+  const [applySGST, setApplySGST] = useState(true)
+  const [applyIGST, setApplyIGST] = useState(false)
+const [cgstPercent, setCgstPercent] = useState<number | ''>('');
+const [sgstPercent, setSgstPercent] = useState<number | ''>('');
+const [igstPercent, setIgstPercent] = useState<number | ''>('');
 
-const fmt = (num: number) => Number(num || 0).toFixed(2);
+  // ✅ FIXED: Transport Charge States - Initialize with DEFAULT values
+const [transportCharge, setTransportCharge] = useState<number | ''>('');
+const [transportChargePercent, setTransportChargePercent] = useState<number | ''>('');
+  const [transportChargeType, setTransportChargeType] = useState<"fixed" | "percent">("fixed")
 
-export default function CreateQuotation() {
-  const { id } = useParams<{ id?: string }>();
-  const navigate = useNavigate();
-  const printRef = useRef<HTMLDivElement>(null);
-  const isEditMode = !!id;
+  const [loadingInvoice, setLoadingInvoice] = useState(false)
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [products, setProducts] = useState<ProductGroup[]>([]);
-  const [flattenedProducts, setFlattenedProducts] = useState<
-    Array<ProductItem & { parentName: string; parentId: string }>
-  >([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
-  const [selectedBillingAddress, setSelectedBillingAddress] = useState<Address | null>(null);
-  const [selectedShippingAddress, setSelectedShippingAddress] = useState<Address | null>(null);
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [includeGST, setIncludeGST] = useState(true);
-  const [isWalkInMode, setIsWalkInMode] = useState(false);
-  const [walkInCustomerName, setWalkInCustomerName] = useState("");
-  const [transportChargePercent, setTransportChargePercent] = useState<number | string>("");
-  const [cgstPercent, setCgstPercent] = useState<number | string>(9);
-  const [sgstPercent, setSgstPercent] = useState<number | string>(9);
-  const [dispatchModes, setDispatchModes] = useState<string[]>([]);
-  const [deliveryTerms, setDeliveryTerms] = useState<string[]>([]);
-  const [paymentTerms, setPaymentTerms] = useState<string[]>([]);
-  const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
-  const [customerCode, setCustomerCode] = useState("CUST-0000");
-  const [copied, setCopied] = useState(false);
-  const [newCustomer, setNewCustomer] = useState<Omit<CustomerData, "id">>({
-    customerCode: "",
-    companyName: "",
-    contactPerson: "",
-    email: "",
-    phone: "",
-    currency: "INR",
-    gst: "",
-    pan: "",
-    cin: "",
-    addresses: [],
-    branches: [],
-  });
-  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
-  const [editingAddress, setEditingAddress] = useState<Address | null>(null);
-  const [addressForm, setAddressForm] = useState<Omit<Address, "id">>(initialAddressForm);
-  const [formData, setFormData] = useState({
-    quoteNumber: `SQFY25-${String(Date.now()).slice(-5)}`,
-    quoteDate: new Date().toISOString().split("T")[0],
-    validity: "30 Days",
-    paymentTerms: "",
-    modeOfDispatch: "",
-    deliveryTerm: "",
-    remarks: "",
-    comments: "",
-    yourRef: "",
-    ourRef: "",
-    verNo: "",
-    verDate: "",
-  });
+  // Data States
+  const [orders, setOrders] = useState<any[]>([])
+  const [allOrders, setAllOrders] = useState<any[]>([])
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
+  const [quotation, setQuotation] = useState<any | null>(null)
+  const [customers, setCustomers] = useState<any[]>([])
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null)
+  const [fgStock, setFgStock] = useState<any[]>([])
+  const [products, setProducts] = useState<Record<string, any>>({})
+  const [allProductItems, setAllProductItems] = useState<any[]>([])
+  const [lineItems, setLineItems] = useState<LineItem[]>([])
+  const [inspections, setInspections] = useState<any[]>([])
+  // ✅ NEW: inventory state
+  const [inventoryItems, setInventoryItems] = useState<any[]>([])
 
-  const currentCurrency = isWalkInMode
-    ? "INR"
-    : (selectedCustomer as any)?.currency || "INR";
-  const currencySymbol = currencies.find(c => c.code === currentCurrency)?.symbol || "₹";
+  const currency = selectedOrder?.currency || selectedCustomer?.currency || "INR"
+  const symbol = CURRENCY_SYMBOLS[currency]
 
-  const convertPriceToCurrency = (inrPrice: number): number => {
-    if (currentCurrency === "INR") return inrPrice;
-    const rate = EXCHANGE_RATES[currentCurrency];
-    return Number((inrPrice / rate).toFixed(2));
-  };
-
-  const digitsOnly = (val: string) => val.replace(/\D/g, "");
-  const limit = (val: string, max: number) => val.slice(0, max);
-  const toUpper = (val: string) => val.toUpperCase();
-  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-  useEffect(() => { loadInitialData(); }, []);
-
+  // Generate Invoice Number
   useEffect(() => {
-    if (id && customers.length > 0) loadQuotationForEdit();
-  }, [id, customers]);
-
-  const loadInitialData = async () => {
-    try {
-      const [cust, prod, salesMaster] = await Promise.all([
-        getAllRecords("sales/customers"),
-        getAllRecords("sales/products"),
-        getRecordById("masters", "sales"),
-      ]);
-      setCustomers(cust as Customer[]);
-      setProducts(prod as ProductGroup[]);
-      const flattened: Array<ProductItem & { parentName: string; parentId: string }> = [];
-      (prod as ProductGroup[]).forEach((productGroup) => {
-        if (Array.isArray(productGroup.items)) {
-          productGroup.items.forEach((item) => {
-            flattened.push({ ...item, parentName: productGroup.name, parentId: productGroup.id });
-          });
-        }
-      });
-      setFlattenedProducts(flattened);
-      const masters = salesMaster as any;
-      setDispatchModes(masters?.dispatchModes || []);
-      setDeliveryTerms(masters?.deliveryTerms || []);
-      setPaymentTerms(masters?.paymentTerms || []);
-      if (masters?.dispatchModes?.length > 0)
-        setFormData(prev => ({ ...prev, modeOfDispatch: masters.dispatchModes[0] }));
-      if (masters?.deliveryTerms?.length > 0)
-        setFormData(prev => ({ ...prev, deliveryTerm: masters.deliveryTerms[0] }));
-      if (masters?.paymentTerms?.length > 0)
-        setFormData(prev => ({ ...prev, paymentTerms: masters.paymentTerms[0] }));
-    } catch (err) {
-      toast.error("Failed to load data");
-    } finally {
-      setLoading(false);
+    if (!isEditMode && !invoiceNumber) {
+      const now = new Date()
+      const fyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1
+      const fy = `${fyStart}-${String(fyStart + 1).slice(-2)}`
+      const seq = String(Date.now()).slice(-5)
+      setInvoiceNumber(`FAS/${fy}/${seq}`)
     }
-  };
+  }, [isEditMode, invoiceNumber])
 
-  const loadQuotationForEdit = async () => {
-    if (!id) return;
-    try {
-      const q = await getRecordById("sales/quotations", id) as any;
-      if (!q) throw new Error("Not found");
-      setIsWalkInMode(q.isWalkIn || false);
-      setWalkInCustomerName(q.walkInCustomerName || "");
-      setIncludeGST(q.includeGST ?? true);
-      setTransportChargePercent(q.transportChargePercent ?? "");
-      setCgstPercent(q.cgstPercent ?? 9);
-      setSgstPercent(q.sgstPercent ?? 9);
-      setFormData({
-        quoteNumber: q.quoteNumber || formData.quoteNumber,
-        quoteDate: q.quoteDate || formData.quoteDate,
-        validity: q.validity || "30 Days",
-        paymentTerms: q.paymentTerms || "",
-        modeOfDispatch: q.modeOfDispatch || "",
-        deliveryTerm: q.deliveryTerm || "",
-        remarks: q.remarks || "",
-        comments: q.comments || "",
-        yourRef: q.yourRef || "",
-        ourRef: q.ourRef || "",
-        verNo: q.verNo || "",
-        verDate: q.verDate || "",
-      });
-      if (!q.isWalkIn && q.customerId) {
-        let customer = customers.find(c => c.id === q.customerId);
-        if (!customer) {
-          const fetched = await getRecordById("sales/customers", q.customerId);
-          if (fetched) {
-            customer = fetched as Customer;
-            // Ensure addresses is always an array
-            (customer as any).addresses = (customer as any).addresses || [];
-            (customer as any).branches = (customer as any).branches || [];
-            setCustomers(prev => [...prev, customer!]);
+  // ✅ CHANGE 1: Load All Data — add inventory fetch + fix eligible orders filter
+  useEffect(() => {
+    const loadAll = async () => {
+      try {
+        const [oaData, custData, fgData, prodData, quotData, inspData, invData] = await Promise.all([
+          getAllRecords("sales/orderAcknowledgements"),
+          getAllRecords("sales/customers"),
+          getAllRecords("stores/fg"),
+          getAllRecords("sales/products"),
+          getAllRecords("sales/quotations"),
+          getAllRecords("quality/inspections"),
+          // ✅ NEW: fetch inventory table
+          getAllRecords("inventory"),
+        ])
+
+        setAllOrders(oaData as any[])
+        setCustomers(custData as any[])
+        setFgStock(fgData as any[])
+        setInspections(inspData as any[])
+        // ✅ NEW: store inventory
+        setInventoryItems(invData as any[])
+
+        // Process Products correctly from sales/products table
+        const flatItems: any[] = []
+        const prodMap: Record<string, any> = {}
+        ;(prodData as any[]).forEach((productDoc: any) => {
+          if (productDoc.items && Array.isArray(productDoc.items)) {
+            productDoc.items.forEach((item: any) => {
+              const productCode = item.productCode
+              if (productCode) {
+                prodMap[productCode] = item
+                flatItems.push(item)
+              }
+            })
           }
-        }
-        setSelectedCustomer(customer || null);
-        setSelectedBillingAddress(q.billingAddress || null);
-        setSelectedShippingAddress(q.shippingAddress || null);
-        if (q.selectedBranch) setSelectedBranch(q.selectedBranch);
-      }
-      setLineItems(
-        q.lineItems?.map((item: any, i: number) => ({
-          sNo: i + 1,
-          productCode: item.productCode || "",
-          sku: item.sku || null,
-          productDescription: item.productDescription || "",
-          hsnCode: item.hsnCode || "",
-          uom: item.uom || "Nos",
-          qty: Number(item.qty) || 1,
-          unitRate: Number(item.unitRate) || 0,
-          amount: Number(item.qty || 1) * Number(item.unitRate || 0),
-          discount: Number(item.discount) || 0,
-          netAmount: Number(item.netAmount) || 0,
-          size: item.size || "",
-        })) || []
-      );
-    } catch (err) {
-      toast.error("Failed to load quotation");
-      navigate("/sales/quotations");
-    }
-  };
-
-  const generateCustomerCode = async () => {
-    try {
-      const all = await getAllRecords("sales/customers");
-      const codes = (all as any[])
-        .map(c => c.customerCode)
-        .filter(c => typeof c === "string" && c.startsWith("CUST-"))
-        .map(c => parseInt(c.split("-")[1] || "0", 10));
-      const next = (Math.max(...codes, 0) + 1).toString().padStart(4, "0");
-      const code = `CUST-${next}`;
-      setCustomerCode(code);
-      setNewCustomer(prev => ({ ...prev, customerCode: code }));
-    } catch {
-      const code = `CUST-${Date.now().toString().slice(-4)}`;
-      setCustomerCode(code);
-      setNewCustomer(prev => ({ ...prev, customerCode: code }));
-    }
-  };
-
-  const openNewCustomerDialog = () => {
-    generateCustomerCode();
-    setNewCustomer({
-      customerCode: "",
-      companyName: "",
-      contactPerson: "",
-      email: "",
-      phone: "",
-      currency: "INR",
-      gst: "",
-      pan: "",
-      cin: "",
-      addresses: [],
-      branches: [],
-    });
-    setCustomerDialogOpen(true);
-  };
-
-  const openAddressDialog = (addr?: Address, type?: "billing" | "shipping") => {
-    if (addr) {
-      setEditingAddress(addr);
-      setAddressForm({ ...addr });
-    } else {
-      setEditingAddress(null);
-      setAddressForm({ ...initialAddressForm, type: type || "billing" });
-    }
-    setAddressDialogOpen(true);
-  };
-
-  const saveAddress = () => {
-    if (!addressForm.street.trim) return toast.error("Street is required");
-    if (!addressForm.city.trim) return toast.error("City is required");
-    if (addressForm.pincode.length !== 6) return toast.error("Pincode must be 6 digits");
-    let updated = [...(newCustomer.addresses || [])];
-    const currentId = editingAddress?.id || nanoid();
-    if (editingAddress) {
-      updated = updated.map(a => a.id === editingAddress.id ? { ...addressForm, id: a.id } : a);
-    } else {
-      updated.push({ ...addressForm, id: currentId });
-    }
-    if (addressForm.isDefault) {
-      updated = updated.map(a => ({
-        ...a,
-        isDefault: a.type === addressForm.type ? a.id === currentId : a.isDefault,
-      }));
-    }
-    setNewCustomer(prev => ({ ...prev, addresses: updated }));
-    setAddressDialogOpen(false);
-    setAddressForm(initialAddressForm);
-    toast.success("Address saved");
-  };
-
-  const deleteAddress = (id: string) => {
-    const addr = (newCustomer.addresses || []).find(a => a.id === id);
-    if (!addr) return;
-    if ((newCustomer.addresses || []).filter(a => a.type === addr.type).length <= 1) {
-      return toast.error(`At least one ${addr.type} address required`);
-    }
-    setNewCustomer(prev => ({ ...prev, addresses: (prev.addresses || []).filter(a => a.id !== id) }));
-  };
-
-  const saveNewCustomer = async () => {
-    if (!newCustomer.companyName.trim()) return toast.error("Company Name required");
-    if (!newCustomer.contactPerson.trim()) return toast.error("Contact Person required");
-    if (!newCustomer.email.trim() || !validateEmail(newCustomer.email))
-      return toast.error("Valid email required");
-    if (newCustomer.phone.length !== 10) return toast.error("Phone must be 10 digits");
-    if ((newCustomer.addresses || []).filter(a => a.type === "billing").length === 0)
-      return toast.error("Add at least one Billing Address");
-    if ((newCustomer.addresses || []).filter(a => a.type === "shipping").length === 0)
-      return toast.error("Add at least one Shipping Address");
-    try {
-      const docRef = await createRecord("sales/customers", {
-        ...newCustomer,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-      const created = { ...newCustomer, id: docRef.id };
-      setCustomers(prev => [...prev, created as Customer]);
-      setSelectedCustomer(created as Customer);
-      const addresses = created.addresses || [];
-      const defaultBilling = addresses.find(a => a.type === "billing" && a.isDefault)
-        || addresses.find(a => a.type === "billing");
-      const defaultShipping = addresses.find(a => a.type === "shipping" && a.isDefault)
-        || addresses.find(a => a.type === "shipping");
-      setSelectedBillingAddress(defaultBilling || null);
-      setSelectedShippingAddress(defaultShipping || null);
-      setIsWalkInMode(false);
-      toast.success("Customer created & selected");
-      setCustomerDialogOpen(false);
-    } catch {
-      toast.error("Failed to create customer");
-    }
-  };
-
-  // ✅ KEY FIX: Always normalize addresses/branches to arrays when selecting a customer
-  const handleCustomerChange = (custId: string) => {
-    const cust = customers.find(c => c.id === custId) || null;
-    setSelectedCustomer(cust);
-    setSelectedBranch(null);
-    if (cust) {
-      const addresses: Address[] = (cust as any).addresses || [];
-      const billing = addresses.find(a => a.type === "billing" && a.isDefault)
-        || addresses.find(a => a.type === "billing");
-      const shipping = addresses.find(a => a.type === "shipping" && a.isDefault)
-        || addresses.find(a => a.type === "shipping");
-      setSelectedBillingAddress(billing || null);
-      setSelectedShippingAddress(shipping || null);
-      const custBranches: Branch[] = (cust as any).branches || [];
-      const headOffice = custBranches.find(b => b.isHeadOffice);
-      if (headOffice) setSelectedBranch(headOffice);
-      setLineItems(prev =>
-        prev.map(item => {
-          const prod = flattenedProducts.find(p => p.productCode === item.productCode);
-          if (prod && prod.unitPrice) {
-            const convertedRate = convertPriceToCurrency(prod.unitPrice);
-            const amount = Number(item.qty || 0) * convertedRate;
-            const netAmount = amount * (1 - Number(item.discount || 0) / 100);
-            return { ...item, unitRate: convertedRate, amount, netAmount };
-          }
-          return item;
         })
-      );
+        setProducts(prodMap)
+        setAllProductItems(flatItems)
+
+        const quotMap = (quotData as any[]).reduce((acc: any, q: any) => {
+          if (q.quoteNumber) acc[q.quoteNumber] = q
+          return acc
+        }, {})
+        ;(window as any).quotMap = quotMap
+
+        // Include any order that has inventory items with okQty > 0 (ready to bill)
+        const eligible = (oaData as any[]).filter((order: any) => {
+          // Always include if there are ready items in inventory — regardless of invoiceStatus
+          const hasReadyItems = (invData as any[]).some(
+            (inv: any) =>
+              (inv.orderId === order.id || inv.soNumber === order.soNumber) &&
+              Number(inv.okQty || 0) > 0
+          )
+          if (hasReadyItems) return true
+
+          // Also include fully completed orders even if inventory is empty
+          return (
+            order.status === "QC Completed" ||
+            order.qcStatus === "completed" ||
+            order.status === "Production Completed" ||
+            order.status === "Completed" ||
+            order.productionStatus === "completed"
+          )
+        })
+        setOrders(eligible)
+      } catch (err) {
+        console.error(err)
+        toast.error("Failed to load data")
+      }
     }
-  };
+    loadAll()
+  }, [])
 
-  const addLineItem = () => {
-    setLineItems(prev => [
-      ...prev,
-      {
-        sNo: prev.length + 1,
-        productCode: "",
-        sku: null,
-        productDescription: "",
-        hsnCode: "",
-        uom: "Nos",
-        qty: 1,
-        unitRate: 0,
-        amount: 0,
-        discount: 0,
-        netAmount: 0,
-        size: "",
-      },
-    ]);
-  };
+  // Load Quotation
+  useEffect(() => {
+    if (!selectedOrder?.quotationNumber) {
+      setQuotation(null)
+      return
+    }
+    const map = (window as any).quotMap
+    const q = map?.[selectedOrder.quotationNumber]
+    setQuotation(q || null)
+  }, [selectedOrder])
 
-  const formatSize = (size: any) => {
-    if (!size) return "";
-    const parts: string[] = [];
-    if (size.height) parts.push(`${size.height}${size.heightUnit || "mm"}`);
-    if (size.width) parts.push(`${size.width}${size.widthUnit || "mm"}`);
-    if (size.length) parts.push(`${size.length}${size.lengthUnit || "mm"}`);
-    if (size.weight) parts.push(`${size.weight}${size.weightUnit || "g"}`);
-    return parts.length ? parts.join(" × ") : "";
-  };
+  // Load Existing Invoice (Edit Mode)
+  useEffect(() => {
+    if (!id) return
 
-  const updateLineItem = (index: number, field: keyof LineItem, value: any) => {
-    setLineItems(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      if (field === "productCode") {
-        const prod = flattenedProducts.find(p => p.productCode === value);
-        if (prod) {
-          const inrPrice = prod.unitPrice || 0;
-          const convertedRate = convertPriceToCurrency(inrPrice);
-          updated[index].productDescription = `${prod.parentName} - ${prod.category} ${prod.group}`;
-          updated[index].unitRate = convertedRate;
-          updated[index].uom = prod.unit || "Nos";
-          updated[index].hsnCode = prod.hsn || "";
-          updated[index].size = formatSize(prod.size);
-          updated[index].sku = null;
+    const load = async () => {
+      setLoadingInvoice(true)
+      try {
+        const inv: any = await getRecord("sales/invoices", id)
+        if (!inv) throw new Error()
+
+        setInvoiceDate(inv.invoiceDate)
+        setTransportMode(inv.transportMode || "Courier")
+        setTransporterName(inv.transporterName || "")
+        setVehicleNo(inv.vehicleNo || "")
+        setDateTimeOfSupply(inv.dateTimeOfSupply || new Date().toISOString().slice(0, 16))
+        setPlaceOfSupply(inv.placeOfSupply || "Tamil Nadu")
+        setCustomerPONo(inv.customerPO || "")
+        setCustomerPODate(inv.customerPODate || "")
+        setPaymentTerms(inv.paymentTerms || "30 Days")
+        setEWayBillNo(inv.eWayBillNo || "")
+        setEWayBillDate(inv.eWayBillDate || "")
+        setRemarks(inv.remarks || "")
+        setApplyCGST(inv.applyCGST ?? true)
+        setApplySGST(inv.applySGST ?? true)
+        setApplyIGST(inv.applyIGST ?? false)
+
+        setCgstPercent(typeof inv.cgstPercent === "number" ? inv.cgstPercent : 9)
+        setSgstPercent(typeof inv.sgstPercent === "number" ? inv.sgstPercent : 9)
+        setIgstPercent(typeof inv.igstPercent === "number" ? inv.igstPercent : 18)
+
+        setTransportCharge(inv.transportCharge || 0)
+        setTransportChargeType(inv.transportChargeType || "fixed")
+        setTransportChargePercent(inv.transportChargePercent || "")
+
+        const items = (inv.lineItems || []).map((li: any, i: number) => {
+          const qty = Number(li.qty || li.invoicedQty || 0)
+          const rate = Number(li.rate || 0)
+          const amount = qty * rate
+          const discount = Number(li.discount || 0)
+          const discountPercent = Number(li.discountPercent || 0)
+          const taxableValue = amount - discount
+
+          return {
+            sNo: i + 1,
+            partCode: li.partCode || li.productCode,
+            description: li.description || li.productName,
+            hsnCode: li.hsnCode || "39269099",
+            availableStock: li.availableStock || 0,
+            invoicedQty: qty,
+            uom: li.uom || "NOS",
+            rate,
+            amount,
+            discount,
+            discountPercent,
+            cgstPercent: Number(li.cgstPercent || 9),
+            sgstPercent: Number(li.sgstPercent || 9),
+            igstPercent: Number(li.igstPercent || 18),
+            cgstAmount: Number(li.cgstAmount || 0),
+            sgstAmount: Number(li.sgstAmount || 0),
+            igstAmount: Number(li.igstAmount || 0),
+            taxableValue,
+            fgIds: li.fgIds || "",
+            // ✅ restore inventoryId in edit mode
+            inventoryId: li.inventoryId || "",
+          }
+        })
+
+        setLineItems(items)
+
+        // Load Order / Customer
+        if (inv.orderId) {
+          setMode("order")
+          const order = allOrders.find((o: any) => o.id === inv.orderId)
+          if (order) setSelectedOrder(order)
         } else {
-          updated[index].sku = null;
-          updated[index].size = "";
-          updated[index].unitRate = 0;
+          setMode(inv.mode || "direct")
+          const cust = customers.find((c: any) => c.id === inv.customerId)
+          if (cust) setSelectedCustomer(cust)
+        }
+
+        if (!isDuplicateMode) {
+          setInvoiceNumber(inv.invoiceNumber)
+        }
+      } catch (err) {
+        toast.error("Invoice not found")
+        navigate("/sales/invoices")
+      } finally {
+        setLoadingInvoice(false)
+      }
+    }
+
+    if (allOrders.length > 0 && customers.length > 0) {
+      load()
+    }
+  }, [id, isDuplicateMode, allOrders, customers, navigate])
+
+  // Auto-select order when navigated from Live Tracking with ?orderId=
+  useEffect(() => {
+    if (!autoOrderId || isEditMode || selectedOrder || allOrders.length === 0) return
+    handleOrderChange(autoOrderId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOrderId, allOrders, inventoryItems])
+
+  const customerState =
+    selectedOrder?.customerState || selectedCustomer?.addresses?.[0]?.state || "Tamil Nadu"
+
+  // Recalculate Item
+  const recalcItem = (item: LineItem): LineItem => {
+    const amount = item.invoicedQty * item.rate
+    const discount =
+      item.discountPercent > 0 ? (amount * item.discountPercent) / 100 : item.discount
+    const taxableValue = amount - discount
+
+    let cgstAmount = 0
+    let sgstAmount = 0
+    let igstAmount = 0
+
+    if (currency === "INR") {
+      if (applyCGST && item.cgstPercent > 0) {
+        cgstAmount = (taxableValue * item.cgstPercent) / 100
+      }
+      if (applySGST && item.sgstPercent > 0) {
+        sgstAmount = (taxableValue * item.sgstPercent) / 100
+      }
+      if (applyIGST && item.igstPercent > 0) {
+        igstAmount = (taxableValue * item.igstPercent) / 100
+      }
+    }
+
+    return {
+      ...item,
+      amount,
+      discount,
+      taxableValue,
+      cgstAmount: Number(cgstAmount.toFixed(2)),
+      sgstAmount: Number(sgstAmount.toFixed(2)),
+      igstAmount: Number(igstAmount.toFixed(2)),
+    }
+  }
+
+  // ✅ CRITICAL FIX: Recalculate all line items when tax percentages or apply flags change
+  useEffect(() => {
+    if (lineItems.length > 0) {
+      setLineItems((prev) =>
+        prev.map((item) =>
+          recalcItem({
+            ...item,
+            cgstPercent: cgstPercent || 0,
+            sgstPercent: sgstPercent || 0,
+            igstPercent: igstPercent || 0,
+          })
+        )
+      )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cgstPercent, sgstPercent, igstPercent, applyCGST, applySGST, applyIGST, currency])
+
+  // ✅ CHANGE 2: Handle Order Change — fetch line items from INVENTORY table
+  const handleOrderChange = (orderId: string) => {
+    const order = allOrders.find((o) => o.id === orderId)
+    if (!order) return
+
+    setSelectedOrder(order)
+    setSelectedCustomer(null)
+
+    // Auto-populate Customer PO fields from order
+    setCustomerPONo(order.customerPONo || '')
+    setCustomerPODate(order.customerPODate || '')
+
+    // ✅ Filter inventory items matching this order, only okQty > 0
+    let orderInventoryItems = inventoryItems.filter(
+      (inv: any) => inv.orderId === order.id && Number(inv.okQty || 0) > 0
+    )
+
+    // Fallback: match by soNumber
+    if (orderInventoryItems.length === 0) {
+      orderInventoryItems = inventoryItems.filter(
+        (inv: any) => inv.soNumber === order.soNumber && Number(inv.okQty || 0) > 0
+      )
+    }
+
+    if (orderInventoryItems.length === 0) {
+      toast.info("No inventory records with OK qty found for this order")
+      setLineItems([])
+      return
+    }
+
+    const items = orderInventoryItems
+      .map((inv: any, i: number) => {
+        const okQty = Number(inv.okQty || 0)
+        if (okQty === 0) return null
+
+        // ✅ Rate from inventory's unitRate field
+        const rate = Number(inv.unitRate || 0)
+
+        return recalcItem({
+          sNo: i + 1,
+          partCode: inv.productCode || "",
+          description: inv.productDescription || inv.productName || inv.productCode || "",
+          hsnCode: inv.hsnCode || "39269099",
+          availableStock: okQty,
+          invoicedQty: okQty,
+          uom: inv.unit || "NOS",
+          rate,
+          amount: 0,
+          discount: 0,
+          discountPercent: 0,
+          cgstPercent: cgstPercent || 9,
+          sgstPercent: sgstPercent || 9,
+          igstPercent: igstPercent || 18,
+          cgstAmount: 0,
+          sgstAmount: 0,
+          igstAmount: 0,
+          taxableValue: 0,
+          fgIds: "",
+          // ✅ track inventory record id
+          inventoryId: inv.id || "",
+        })
+      })
+      .filter(Boolean) as LineItem[]
+
+    setLineItems(items)
+  }
+
+  // Add FG Item (Finished Goods from FG Stock)
+  const addFgItem = (productCode: string) => {
+    const fgItems = fgStock.filter((f: any) => f.productCode === productCode && f.qc === "ok")
+    const totalAvailable = fgItems.reduce((s: number, f: any) => s + Number(f.quantity), 0)
+
+    if (totalAvailable === 0) {
+      toast.info("No FG stock available")
+      return
+    }
+
+    if (lineItems.find((i) => i.partCode === productCode)) {
+      toast.info("Already added")
+      return
+    }
+
+    const prod = products[productCode]
+    const rate = Number(prod?.unitPrice || 0)
+
+    const newItem: LineItem = recalcItem({
+      sNo: lineItems.length + 1,
+      partCode: productCode,
+      description: prod?.category ? `${prod.category} - ${prod.group}` : productCode,
+      hsnCode: prod?.hsn || "39269099",
+      availableStock: totalAvailable,
+      invoicedQty: 1,
+      uom: prod?.unit || "NOS",
+      rate,
+      amount: 0,
+      discount: 0,
+      discountPercent: 0,
+      cgstPercent: cgstPercent || 9,
+      sgstPercent: sgstPercent || 9,
+      igstPercent: igstPercent || 18,
+      cgstAmount: 0,
+      sgstAmount: 0,
+      igstAmount: 0,
+      taxableValue: 0,
+      fgIds: "",
+    })
+
+    setLineItems([...lineItems, newItem])
+  }
+
+  // Add Raw Material Item (from products table stockQty)
+  const addRawMaterialItem = (productCode: string) => {
+    const prod = products[productCode]
+    
+    if (!prod) {
+      toast.error("Product not found")
+      return
+    }
+
+    const available = Number(prod.stockQty || 0)
+
+    if (lineItems.find((i) => i.partCode === productCode)) {
+      toast.info("Already added")
+      return
+    }
+
+    const rate = Number(prod.unitPrice || 0)
+
+    const newItem: LineItem = recalcItem({
+      sNo: lineItems.length + 1,
+      partCode: productCode,
+      description: prod.category ? `${prod.category} - ${prod.group}` : productCode,
+      hsnCode: prod.hsn || "39269099",
+      availableStock: available,
+      invoicedQty: 1,
+      uom: prod.unit || "NOS",
+      rate,
+      amount: 0,
+      discount: 0,
+      discountPercent: 0,
+      cgstPercent: cgstPercent || 9,
+      sgstPercent: sgstPercent || 9,
+      igstPercent: igstPercent || 18,
+      cgstAmount: 0,
+      sgstAmount: 0,
+      igstAmount: 0,
+      taxableValue: 0,
+      fgIds: "",
+    })
+
+    setLineItems([...lineItems, newItem])
+  }
+
+  // Update Qty
+  const updateQty = (idx: number, qty: number) => {
+    setLineItems((prev) => {
+      const updated = [...prev]
+      const item = updated[idx]
+      const max = item.availableStock || 0
+      const newQty = Math.max(0, Math.min(qty, max))
+      updated[idx] = recalcItem({ ...item, invoicedQty: newQty })
+      return updated
+    })
+  }
+
+  // Update Item Field
+  const updateItemField = (idx: number, field: keyof LineItem, value: any) => {
+    setLineItems((prev) => {
+      const updated = [...prev]
+      updated[idx] = recalcItem({ ...updated[idx], [field]: value })
+      return updated
+    })
+  }
+
+  // Remove Item
+  const removeItem = (idx: number) => {
+    setLineItems((prev) =>
+      prev.filter((_, i) => i !== idx).map((it, i) => ({ ...it, sNo: i + 1 }))
+    )
+  }
+
+  // Calculate Transport Charge
+  const calculateTransportCharge = () => {
+    if (transportChargeType === "fixed") {
+      return Number(transportCharge || 0)
+    } else {
+      const itemsTotal = lineItems.reduce((sum, i) => sum + i.taxableValue, 0)
+      const percent = Number(transportChargePercent || 0)
+      return (itemsTotal * percent) / 100
+    }
+  }
+
+  const finalTransportCharge = calculateTransportCharge()
+
+  // Calculate Totals
+  const calculateTotals = () => {
+    const itemsTotal = lineItems.reduce((sum, i) => sum + i.taxableValue, 0)
+    const taxable = itemsTotal + finalTransportCharge
+
+    let cgst = 0
+    let sgst = 0
+    let igst = 0
+
+    if (currency === "INR") {
+      const itemsCGST = lineItems.reduce((sum, i) => sum + i.cgstAmount, 0)
+      const itemsSGST = lineItems.reduce((sum, i) => sum + i.sgstAmount, 0)
+      const itemsIGST = lineItems.reduce((sum, i) => sum + i.igstAmount, 0)
+
+      let transportCGST = 0
+      let transportSGST = 0
+      let transportIGST = 0
+
+      if (finalTransportCharge > 0) {
+        if (applyCGST && cgstPercent > 0) {
+          transportCGST = (finalTransportCharge * cgstPercent) / 100
+        }
+        if (applySGST && sgstPercent > 0) {
+          transportSGST = (finalTransportCharge * sgstPercent) / 100
+        }
+        if (applyIGST && igstPercent > 0) {
+          transportIGST = (finalTransportCharge * igstPercent) / 100
         }
       }
-      const item = updated[index];
-      item.amount = Number(item.qty || 0) * Number(item.unitRate || 0);
-      item.netAmount = item.amount * (1 - Number(item.discount || 0) / 100);
-      return updated;
-    });
-  };
 
-  const removeLineItem = (index: number) => {
-    setLineItems(prev =>
-      prev.filter((_, i) => i !== index).map((it, idx) => ({ ...it, sNo: idx + 1 }))
-    );
-  };
-
-  const calculateTotals = () => {
-    const subtotal = lineItems.reduce((sum, i) => sum + i.netAmount, 0);
-    const cgst = includeGST && currentCurrency === "INR"
-      ? (subtotal * Number(cgstPercent || 0)) / 100 : 0;
-    const sgst = includeGST && currentCurrency === "INR"
-      ? (subtotal * Number(sgstPercent || 0)) / 100 : 0;
-    const transportCharge = subtotal * Number(transportChargePercent || 0) / 100;
-    const total = subtotal + cgst + sgst + transportCharge;
-    return { subtotal, cgst, sgst, transportCharge, total };
-  };
-
-  const { subtotal, cgst, sgst, transportCharge, total } = calculateTotals();
-
-  // ✅ Safe address/branches access with fallbacks
-  const customerAddresses: Address[] = (selectedCustomer as any)?.addresses || [];
-  const customerBranches: Branch[] = (selectedCustomer as any)?.branches || [];
-
-  const quotationData = {
-    ...formData,
-    customerName: isWalkInMode
-      ? walkInCustomerName || "Walk-in Customer"
-      : (selectedCustomer as any)?.companyName || "",
-    customerGST: isWalkInMode ? "" : (selectedCustomer as any)?.gst || "",
-    customerPAN: isWalkInMode ? "" : (selectedCustomer as any)?.pan || "",
-    customerCIN: isWalkInMode ? "" : (selectedCustomer as any)?.cin || "",
-    currency: currentCurrency,
-    currencySymbol,
-    billingAddress: selectedBillingAddress,
-    shippingAddress: selectedShippingAddress,
-    selectedBranch,
-    lineItems,
-    subtotal,
-    cgstAmount: includeGST && currentCurrency === "INR" ? cgst : 0,
-    sgstAmount: includeGST && currentCurrency === "INR" ? sgst : 0,
-    transportCharge,
-    cgstPercent: Number(cgstPercent || 0),
-    sgstPercent: Number(sgstPercent || 0),
-    transportChargePercent: Number(transportChargePercent || 0),
-    grandTotal: total,
-    includeGST: includeGST && currentCurrency === "INR",
-    isWalkIn: isWalkInMode,
-    customerId: isWalkInMode ? null : selectedCustomer?.id,
-  };
-
-  const handleDownloadPDF = async () => {
-    if (!printRef.current) return;
-    const element = printRef.current;
-    const opt = {
-      margin: 0,
-      filename: `${quotationData.quoteNumber}.pdf`,
-      image: { type: "jpeg", quality: 1 },
-      html2canvas: { scale: 3, useCORS: true, letterRendering: true },
-      jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
-    };
-    html2pdf().set(opt).from(element).save();
-  };
-
-  const handleSave = async () => {
-    if (lineItems.length === 0 || lineItems.some(i => !i.productCode)) {
-      toast.error("Complete all line items");
-      return;
+      cgst = itemsCGST + transportCGST
+      sgst = itemsSGST + transportSGST
+      igst = itemsIGST + transportIGST
     }
-    if (!isWalkInMode && !selectedCustomer) {
-      toast.error("Select a customer or enable Walk-in");
-      return;
+
+    const total = taxable + cgst + sgst + igst
+
+    return {
+      taxable: Number(taxable.toFixed(2)),
+      cgst: Number(cgst.toFixed(2)),
+      sgst: Number(sgst.toFixed(2)),
+      igst: Number(igst.toFixed(2)),
+      total: Number(total.toFixed(2)),
+      transportCharge: finalTransportCharge,
     }
-    if (isWalkInMode && !walkInCustomerName.trim()) {
-      toast.error("Enter Customer Name for Walk-in");
-      return;
+  }
+
+  const { taxable, cgst, sgst, igst, total, transportCharge: calculatedTransportCharge } =
+    calculateTotals()
+
+  // Format Amount
+  const formatAmount = (n: number) =>
+    n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  // Number to Words
+  const numberToWords = (num: number): string => {
+    if (currency !== "INR") return ""
+
+    const units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]
+    const teens = [
+      "Ten",
+      "Eleven",
+      "Twelve",
+      "Thirteen",
+      "Fourteen",
+      "Fifteen",
+      "Sixteen",
+      "Seventeen",
+      "Eighteen",
+      "Nineteen",
+    ]
+    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+
+    const integerPart = Math.floor(num)
+
+    if (integerPart === 0) return "Zero Rupees Only"
+
+    let word = ""
+
+    let part = Math.floor(integerPart / 10000000)
+    if (part > 0) {
+      word += numberToWords(part).replace(" Rupees Only", "") + " Crore "
     }
-    const saveData: any = {
-      ...quotationData,
-      lineItems: lineItems.map(({ sNo, ...rest }) => rest),
-      billingAddress: selectedBillingAddress,
-      shippingAddress: selectedShippingAddress,
-      selectedBranch,
-      transportChargePercent,
-      cgstPercent,
-      sgstPercent,
-      updatedAt: Date.now(),
-      ...(!isEditMode ? { createdAt: Date.now(), status: "Draft" } : {}),
-    };
-    if (isWalkInMode) saveData.walkInCustomerName = walkInCustomerName.trim();
-    try {
-      if (isEditMode) {
-        await updateRecord("sales/quotations", id!, saveData);
-        toast.success("Quotation updated!");
+
+    part = Math.floor(integerPart / 100000) % 100
+    if (part > 0) {
+      word += convertTwoDigit(part) + " Lakh "
+    }
+
+    part = Math.floor(integerPart / 1000) % 100
+    if (part > 0) {
+      word += convertTwoDigit(part) + " Thousand "
+    }
+
+    part = Math.floor(integerPart / 100) % 10
+    if (part > 0) {
+      word += units[part] + " Hundred "
+    }
+
+    part = integerPart % 100
+    if (part > 0) {
+      word += convertTwoDigit(part) + " "
+    }
+
+    return word.trim() + " Rupees Only"
+
+    function convertTwoDigit(n: number): string {
+      if (n < 10) return units[n]
+      if (n >= 10 && n < 20) return teens[n - 10]
+      return tens[Math.floor(n / 10)] + (n % 10 > 0 ? " " + units[n % 10] : "")
+    }
+  }
+
+  const amountInWords = numberToWords(total)
+
+  // Deduct From FG Stock
+  const deductFromFgStock = async (item: LineItem) => {
+    if (item.invoicedQty === 0) return
+
+    let candidates = fgStock.filter(
+      (f: any) =>
+        f.productCode === item.partCode &&
+        f.qc === "ok" &&
+        (mode === "order" ? f.soNumber === selectedOrder?.soNumber : true)
+    )
+
+    candidates.sort((a: any, b: any) => (a.createdAt || 0) - (b.createdAt || 0))
+
+    let remaining = item.invoicedQty
+    for (const fg of candidates) {
+      if (remaining <= 0) break
+
+      const deduct = Math.min(remaining, Number(fg.quantity || 0))
+      const newQty = Number(fg.quantity || 0) - deduct
+
+      if (newQty <= 0) {
+        await deleteRecord("stores/fg", fg.id)
       } else {
-        await createRecord("sales/quotations", saveData);
-        toast.success("Quotation created!");
+        await updateRecord("stores/fg", fg.id, { quantity: newQty })
       }
-      navigate("/sales/quotations");
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to save");
-    }
-  };
 
-  if (loading) return <div className="p-10 text-center">Loading...</div>;
+      remaining -= deduct
+    }
+  }
+
+  // Deduct from Raw Material Stock (products table)
+  const deductFromRawMaterialStock = async (item: LineItem) => {
+    if (item.invoicedQty === 0) return
+    
+    const prod = products[item.partCode]
+    if (!prod) return
+
+    const currentStock = Number(prod.stockQty || 0)
+    const newStock = Math.max(0, currentStock - item.invoicedQty)
+
+    // Find the product document ID from allProductItems
+    let productDocId = ""
+    let itemIndex = -1
+    
+    const allProductDocs = await getAllRecords("sales/products")
+    for (const doc of allProductDocs as any[]) {
+      if (doc.items && Array.isArray(doc.items)) {
+        const idx = doc.items.findIndex((i: any) => i.productCode === item.partCode)
+        if (idx !== -1) {
+          productDocId = doc.id
+          itemIndex = idx
+          break
+        }
+      }
+    }
+
+    if (productDocId && itemIndex !== -1) {
+      // Update the specific item's stockQty in the products array
+      const productDoc = allProductDocs.find((d: any) => d.id === productDocId) as any
+      const updatedItems = [...productDoc.items]
+      updatedItems[itemIndex] = {
+        ...updatedItems[itemIndex],
+        stockQty: newStock
+      }
+      
+      await updateRecord("sales/products", productDocId, { items: updatedItems })
+    }
+  }
+
+  // ✅ NEW: Deduct from Inventory table (for "order" mode) — real-time okQty reduction
+  const deductFromInventory = async (item: LineItem) => {
+    if (item.invoicedQty === 0 || !item.inventoryId) return
+
+    const invRecord = inventoryItems.find((inv: any) => inv.id === item.inventoryId)
+    if (!invRecord) return
+
+    const currentOkQty = Number(invRecord.okQty || 0)
+    const newOkQty = Math.max(0, currentOkQty - item.invoicedQty)
+
+    await updateRecord("inventory", item.inventoryId, {
+      okQty: newOkQty,
+      updatedAt: Date.now(),
+    })
+  }
+
+  // ✅ CHANGE 3: Handle Save — add deductFromInventory for order mode
+  const handleSave = async () => {
+    if (lineItems.length === 0 || lineItems.every((i) => i.invoicedQty === 0)) {
+      toast.error("Add at least one item")
+      return
+    }
+
+    const payload: any = {
+      invoiceNumber,
+      invoiceDate,
+      customerId: selectedOrder?.customerId || selectedCustomer?.id || "",
+      customerName: selectedOrder?.customerName || selectedCustomer?.companyName || "",
+      customerGST: selectedOrder?.customerGST || selectedCustomer?.gst || "",
+      paymentTerms,
+      transportMode,
+      transporterName,
+      vehicleNo,
+      dateTimeOfSupply,
+      placeOfSupply,
+      customerPO: customerPONo,
+      customerPODate,
+      eWayBillNo,
+      eWayBillDate,
+      remarks,
+      applyCGST,
+      applySGST,
+      applyIGST,
+      cgstPercent: Number(cgstPercent) || 0,
+      sgstPercent: Number(sgstPercent) || 0,
+      igstPercent: Number(igstPercent) || 0,
+      currency,
+      taxableAmount: taxable - calculatedTransportCharge,
+      transportCharge: calculatedTransportCharge,
+      transportChargeType,
+      transportChargePercent: transportChargePercent || 0,
+      cgstAmount: applyCGST ? cgst : 0,
+      sgstAmount: applySGST ? sgst : 0,
+      igstAmount: applyIGST ? igst : 0,
+      grandTotal: total,
+      lineItems: lineItems.map((i) => ({
+        ...i,
+        qty: i.invoicedQty,
+        cgstPercent: Number(i.cgstPercent) || 0,
+        sgstPercent: Number(i.sgstPercent) || 0,
+        igstPercent: Number(i.igstPercent) || 0,
+      })),
+      mode,
+      orderId: mode === "order" ? selectedOrder?.id : null,
+      soNumber: mode === "order" ? selectedOrder?.soNumber : null,
+      quotationId: quotation?.id || null,
+      status: "Generated",
+      updatedAt: Date.now(),
+    }
+
+    if (!isEditMode) {
+      payload.createdAt = Date.now()
+    }
+
+    try {
+      if (isEditMode && id) {
+        await updateRecord("sales/invoices", id, payload)
+        toast.success("Invoice updated")
+      } else {
+        await createRecord("sales/invoices", payload)
+        toast.success("Invoice created")
+      }
+
+      // Update Order invoicedQty cumulatively — 'generated' only when all ordered qty is invoiced
+      if (mode === "order" && selectedOrder) {
+        const totalBeingInvoiced = lineItems.reduce((sum, li) => sum + li.invoicedQty, 0)
+
+        // Total qty across all order line items
+        const totalOrderedQty = (selectedOrder.lineItems || []).reduce(
+          (sum: number, li: any) => sum + Number(li.salesQty || li.qty || 0),
+          0
+        )
+
+        // Cumulative invoiced qty (previous + this invoice)
+        const prevInvoicedQty = Number(selectedOrder.invoicedQty || 0)
+        const newInvoicedQty = prevInvoicedQty + totalBeingInvoiced
+
+        // Fully invoiced only when cumulative invoiced qty covers all ordered qty
+        const fullyInvoiced = totalOrderedQty > 0 && newInvoicedQty >= totalOrderedQty
+
+        await updateRecord("sales/orderAcknowledgements", selectedOrder.id, {
+          invoicedQty: newInvoicedQty,
+          invoiceStatus: fullyInvoiced ? "generated" : "partial",
+          status: fullyInvoiced ? "Invoice Generated" : selectedOrder.status,
+          updatedAt: Date.now(),
+        })
+      }
+
+      // ✅ FIXED: Deduct Stock based on mode
+      for (const item of lineItems) {
+        if (mode === "order") {
+          // ✅ For order mode: deduct from inventory table (okQty) in real-time
+          await deductFromInventory(item)
+        } else if (mode === "direct") {
+          await deductFromFgStock(item)
+        } else if (mode === "rawmaterial") {
+          await deductFromRawMaterialStock(item)
+        }
+      }
+
+      toast.success("Invoice saved & inventory updated")
+      navigate("/sales/invoices")
+    } catch (e: any) {
+      console.error(e)
+      toast.error("Save failed: " + (e.message || "Error"))
+    }
+  }
+
+  // Handle Download PDF
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return
+
+    try {
+      const canvas = await html2canvas(printRef.current, {
+        scale: 3,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      })
+
+      const img = canvas.toDataURL("image/png")
+      const pdf = new jsPDF("l", "mm", "a4")
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = canvas.width
+      const imgHeight = canvas.height
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight)
+      const imgX = (pdfWidth - imgWidth * ratio) / 2
+      const imgY = 0
+
+      pdf.addImage(img, "PNG", imgX, imgY, imgWidth * ratio, imgHeight * ratio)
+      pdf.save(`${invoiceNumber}.pdf`)
+      toast.success("PDF downloaded")
+    } catch {
+      toast.error("PDF generation failed")
+    }
+  }
+
+  const billingAddress =
+    quotation?.billingAddress || selectedCustomer?.addresses?.find((a: any) => a.type === "billing")
+  const shippingAddress =
+    quotation?.shippingAddress ||
+    selectedCustomer?.addresses?.find((a: any) => a.type === "shipping")
+
+  if (loadingInvoice) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-xl font-medium">
+        Loading invoice...
+      </div>
+    )
+  }
+
+  const pages: LineItem[][] = []
+  for (let i = 0; i < lineItems.length; i += ITEMS_PER_PAGE) {
+    pages.push(lineItems.slice(i, i + ITEMS_PER_PAGE))
+  }
+  if (pages.length === 0) pages.push([])
+  const totalPages = pages.length
+
+  const CompanyHeader = (
+    <div
+      style={{
+        textAlign: "center",
+        padding: "12px 16px",
+        borderBottom: "3px solid #000",
+        background: "#ffffff",
+      }}
+    >
+      <img
+        src={fas}
+        alt="FAS"
+        style={{ width: "70px", height: "auto", margin: "0 auto 6px", display: "block" }}
+        crossOrigin="anonymous"
+      />
+      <h1
+        style={{
+          fontSize: "18px",
+          fontWeight: 900,
+          margin: "3px 0",
+          color: "#000",
+          letterSpacing: "0.5px",
+        }}
+      >
+        Fluoro Automation Seals Pvt Ltd
+      </h1>
+      <p style={{ fontSize: "10px", margin: "2px 0", color: "#000", fontWeight: 600 }}>
+        3/180, Rajiv Gandhi Road, Mettukuppam, Chennai Tamil Nadu 600097 India
+      </p>
+      <p style={{ fontSize: "10px", margin: "2px 0", color: "#000", fontWeight: 600 }}>
+        Phone: 9841175097 | Email: fas@fluoroautomationseals.com
+      </p>
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-gray-50 py-6">
-      <style>{`
-        input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
-      `}</style>
-      <div className="max-w-7xl mx-auto px-4">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
+    <div className="min-h-screen bg-gray-50 py-4">
+      <div className="max-w-full mx-auto px-4">
+        {/* HEADER */}
+        <div className="flex flex-wrap gap-4 justify-between items-center mb-6">
+          <Button variant="ghost" onClick={() => navigate("/sales/invoices")}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+
           <h1 className="text-3xl font-bold text-blue-900">
-            {isEditMode ? "Edit Quotation" : "Create Quotation"}
+            {isEditMode ? "Edit Invoice" : "Create New Invoice"}
           </h1>
+
           <div className="flex gap-3">
-            <Button variant="outline" onClick={() => navigate("/sales/quotations")}>
-              <ArrowLeft className="h-4 w-4 mr-2" /> Back
+            <Button variant="secondary" onClick={handleDownloadPdf}>
+              <Download className="w-4 h-4 mr-2" />
+              Download PDF
             </Button>
-            <Button variant="secondary" onClick={handleDownloadPDF}>
-              <Download className="h-4 w-4 mr-2" /> Download PDF
-            </Button>
-            <Button onClick={handleSave} className="bg-blue-700 hover:bg-blue-800">
-              {isEditMode ? "Update" : "Save Quotation"}
+            <Button onClick={handleSave} className="bg-blue-700 hover:bg-blue-800 px-8">
+              {isEditMode ? "Update Invoice" : "Generate Invoice"}
             </Button>
           </div>
         </div>
 
-        <div className="space-y-6 mb-8">
-          {/* Walk-in Mode */}
-          <Card className="border-2 border-dashed border-blue-400 bg-blue-50">
-            <CardContent className="pt-6">
-              <div className="flex items-center space-x-3">
-                <Checkbox
-                  id="walkin"
-                  checked={isWalkInMode}
-                  onCheckedChange={(c) => {
-                    setIsWalkInMode(c as boolean);
-                    if (c) {
-                      setSelectedCustomer(null);
-                      setSelectedBranch(null);
-                      setSelectedBillingAddress(null);
-                      setSelectedShippingAddress(null);
-                    }
-                  }}
-                />
-                <Label htmlFor="walkin" className="cursor-pointer text-lg font-semibold text-blue-900">
-                  Walk-in / Cash Sale — No Customer Details
-                </Label>
-              </div>
-              {isWalkInMode && (
-                <div className="mt-4">
-                  <Label>Customer Name</Label>
-                  <Input
-                    value={walkInCustomerName}
-                    onChange={e => setWalkInCustomerName(e.target.value)}
-                    placeholder="Enter customer name"
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* TABS */}
+        <Tabs value={mode} onValueChange={(v) => setMode(v as any)} className="mb-4">
+          <TabsList className="grid w-full max-w-3xl grid-cols-3">
+            <TabsTrigger value="order">From Sales Order</TabsTrigger>
+            {/* <TabsTrigger value="direct">Direct Sale (FG Stock)</TabsTrigger> */}
+            <TabsTrigger value="rawmaterial">Direct Sale (Raw Material)</TabsTrigger>
+          </TabsList>
 
-          {/* Customer Selection */}
-          {!isWalkInMode && (
+          {/* ✅ CHANGE 4: FROM ORDER tab — updated label + inventory feedback */}
+          <TabsContent value="order" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  Customer
-                  <Button size="sm" onClick={openNewCustomerDialog}>
-                    <UserPlus className="h-4 w-4 mr-2" /> New Customer
-                  </Button>
-                </CardTitle>
+                <CardTitle>Select Sales Order (QC Completed / Production Completed)</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>Customer</Label>
-                  <Select value={selectedCustomer?.id || ""} onValueChange={handleCustomerChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map(c => (
-                        <SelectItem key={c.id} value={c.id!}>
-                          <div className="flex items-center gap-2">
-                            <Globe className="h-3 w-3" />
-                            {c.companyName} {(c as any).customerCode} — {(c as any).currency || "INR"}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <CardContent>
+                <Select
+                  value={selectedOrder?.id || ""}
+                  onValueChange={handleOrderChange}
+                  disabled={isEditMode}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select order..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orders.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.soNumber} - {o.customerName} ({o.currency}) - Status: {o.status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-                {/* Branch Selection */}
-                {selectedCustomer && customerBranches.length > 0 && (
-                  <div className="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
-                    <Label className="flex items-center gap-2 mb-2">
-                      <Building2 className="h-4 w-4 text-orange-600" /> Select Branch (Optional)
-                    </Label>
-                    <Select
-                      value={selectedBranch?.id || ""}
-                      onValueChange={(branchId) => {
-                        const branch = customerBranches.find(b => b.id === branchId);
-                        setSelectedBranch(branch || null);
-                      }}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="no-branch">No Branch Selected</SelectItem>
-                        {customerBranches.map(branch => (
-                          <SelectItem key={branch.id} value={branch.id}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">
-                                {branch.branchName} {branch.branchCode}
-                                {branch.isHeadOffice && (
-                                  <span className="ml-2 text-xs bg-orange-600 text-white px-2 py-0.5 rounded">
-                                    HEAD OFFICE
-                                  </span>
-                                )}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {branch.city}, {branch.state}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedBranch && (
-                      <div className="mt-3 p-3 bg-white rounded border text-sm">
-                        <p className="font-semibold text-orange-700">{selectedBranch.branchName}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {selectedBranch.address}, {selectedBranch.city}, {selectedBranch.state} - {selectedBranch.pincode}
-                        </p>
-                        <p className="text-xs mt-1">
-                          <strong>Contact:</strong> {selectedBranch.contactPerson} {selectedBranch.phone}
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                {orders.length === 0 && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    No eligible orders. Orders with QC Completed or Production Completed status are shown.
+                  </p>
                 )}
 
-                {/* Billing Address */}
-                {selectedCustomer && (
-                  <div>
-                    <Label>Billing Address</Label>
-                    <Select
-                      value={selectedBillingAddress?.id || ""}
-                      onValueChange={v => {
-                        const addr = customerAddresses.find(a => a.id === v && a.type === "billing");
-                        setSelectedBillingAddress(addr || null);
-                      }}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select billing address" /></SelectTrigger>
-                      <SelectContent>
-                        {customerAddresses.filter(a => a.type === "billing").map(addr => (
-                          <SelectItem key={addr.id} value={addr.id}>
-                            {addr.label} - {addr.city}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                {/* ✅ Inventory load feedback */}
+                {selectedOrder && lineItems.length > 0 && (
+                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                    ✅ <strong>{lineItems.length} item(s)</strong> loaded from Inventory table. Rate sourced from <code>unitRate</code>. Available qty = <code>okQty</code>.
                   </div>
                 )}
-
-                {/* Shipping Address */}
-                {selectedCustomer && (
-                  <div>
-                    <Label>Shipping Address</Label>
-                    <Select
-                      value={selectedShippingAddress?.id || ""}
-                      onValueChange={v => {
-                        const addr = customerAddresses.find(a => a.id === v && a.type === "shipping");
-                        setSelectedShippingAddress(addr || null);
-                      }}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select shipping address" /></SelectTrigger>
-                      <SelectContent>
-                        {customerAddresses.filter(a => a.type === "shipping").map(addr => (
-                          <SelectItem key={addr.id} value={addr.id}>
-                            {addr.label} - {addr.city}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                {selectedOrder && lineItems.length === 0 && (
+                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                    ⚠️ No inventory records with OK qty found for this order.
                   </div>
                 )}
               </CardContent>
             </Card>
-          )}
+          </TabsContent>
 
-          {/* Tax & Charges */}
-          <Card>
-            <CardHeader><CardTitle>Tax &amp; Charges</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="gst"
-                  checked={includeGST && currentCurrency === "INR"}
-                  disabled={currentCurrency !== "INR"}
-                  onCheckedChange={c => setIncludeGST(c as boolean)}
-                />
-                <Label htmlFor="gst" className="cursor-pointer">
-                  Include GST {currentCurrency !== "INR" && "(Only for INR)"}
-                </Label>
+          {/* DIRECT SALE FROM FG STOCK */}
+          <TabsContent value="direct" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Select Customer</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Select
+                  value={selectedCustomer?.id || ""}
+                  onValueChange={(v) => {
+                    const cust = customers.find((c) => c.id === v)
+                    setSelectedCustomer(cust || null)
+                    setLineItems([])
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose customer..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.companyName} ({c.customerCode})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+
+            {selectedCustomer && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Add Products from Finished Goods Stock</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Select onValueChange={addFgItem}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Search FG product..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allProductItems
+                        .filter(
+                          (item) =>
+                            item.type === "FINISHED GOODS" || item.type === "SEMI FINISHED GOODS"
+                        )
+                        .map((item) => {
+                          const code = item.productCode
+                          const fg = fgStock.filter(
+                            (f: any) => f.productCode === code && f.qc === "ok"
+                          )
+                          const total = fg.reduce((s: number, f: any) => s + Number(f.quantity), 0)
+                          if (total === 0) return null
+                          return (
+                            <SelectItem key={code} value={code}>
+                              {code} - {item.category} - {item.group} ({total} {item.unit || "NOS"}{" "}
+                              available)
+                            </SelectItem>
+                          )
+                        })
+                        .filter(Boolean)}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* DIRECT SALE FROM RAW MATERIAL */}
+          <TabsContent value="rawmaterial" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Select Customer</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Select
+                  value={selectedCustomer?.id || ""}
+                  onValueChange={(v) => {
+                    const cust = customers.find((c) => c.id === v)
+                    setSelectedCustomer(cust || null)
+                    setLineItems([])
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose customer..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.companyName} ({c.customerCode})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+
+            {selectedCustomer && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Add Products from Raw Materials</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Select onValueChange={addRawMaterialItem}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Search raw material product..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allProductItems
+                        .filter((item) => item.productCode)
+                        .map((item) => {
+                          const stock = Number(item.stockQty || 0)
+                          return (
+                            <SelectItem key={item.productCode} value={item.productCode}>
+                              {item.productCode} - {item.category || "N/A"} - {item.group || "N/A"} ({stock} {item.unit || "NOS"} available)
+                            </SelectItem>
+                          )
+                        })}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {/* LINE ITEMS EDITOR */}
+        {lineItems.length > 0 && (
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle>Line Items Editor</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-300 text-sm">
+                  <thead className="bg-gray-200">
+                    <tr>
+                      <th className="border border-gray-300 p-2">#</th>
+                      <th className="border border-gray-300 p-2">Part Code</th>
+                      <th className="border border-gray-300 p-2">Description</th>
+                      <th className="border border-gray-300 p-2">HSN</th>
+                      <th className="border border-gray-300 p-2">Available</th>
+                      <th className="border border-gray-300 p-2">Qty</th>
+                      <th className="border border-gray-300 p-2">UOM</th>
+                      <th className="border border-gray-300 p-2">Rate</th>
+                      <th className="border border-gray-300 p-2">Amount</th>
+                      <th className="border border-gray-300 p-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lineItems.map((item, i) => (
+                      <tr key={i}>
+                        <td className="border border-gray-300 p-2 text-center">{i + 1}</td>
+                        <td className="border border-gray-300 p-2">{item.partCode}</td>
+                        <td className="border border-gray-300 p-2">{item.description}</td>
+                        <td className="border border-gray-300 p-2">
+                          <Input
+                            value={item.hsnCode}
+                            onChange={(e) => updateItemField(i, "hsnCode", e.target.value)}
+                            className="w-24"
+                          />
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center font-semibold">
+                          {item.availableStock}
+                        </td>
+                        <td className="border border-gray-300 p-2">
+                          <Input
+                            type="number"
+                            value={item.invoicedQty}
+                            onChange={(e) => updateQty(i, Number(e.target.value))}
+                            min={0}
+                            max={item.availableStock}
+                            className="w-20"
+                          />
+                        </td>
+                        <td className="border border-gray-300 p-2">
+                          <Input
+                            value={item.uom}
+                            onChange={(e) => updateItemField(i, "uom", e.target.value)}
+                            className="w-20"
+                          />
+                        </td>
+                        <td className="border border-gray-300 p-2">
+                          <Input
+                            type="number"
+                            value={item.rate}
+                            onChange={(e) => updateItemField(i, "rate", Number(e.target.value))}
+                            min={0}
+                            step={0.01}
+                            className="w-24"
+                          />
+                        </td>
+                        <td className="border border-gray-300 p-2 text-right font-semibold">
+                          {symbol}{formatAmount(item.amount)}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center">
+                          <Button variant="destructive" size="sm" onClick={() => removeItem(i)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              {includeGST && currentCurrency === "INR" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>CGST %</Label>
-                    <Input
-                      type="number"
-                      value={cgstPercent}
-                      onChange={e => setCgstPercent(e.target.value ? Number(e.target.value) : "")}
-                      min={0} step={0.01}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Amount: {currencySymbol}{fmt(cgst)}</p>
-                  </div>
-                  <div>
-                    <Label>SGST %</Label>
-                    <Input
-                      type="number"
-                      value={sgstPercent}
-                      onChange={e => setSgstPercent(e.target.value ? Number(e.target.value) : "")}
-                      min={0} step={0.01}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Amount: {currencySymbol}{fmt(sgst)}</p>
-                  </div>
-                </div>
-              )}
+
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-sm text-blue-900">
+                  <strong>Note:</strong> Tax percentages (CGST, SGST, IGST) are controlled globally
+                  in the GST Configuration section below. Discount is not editable per item.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* INVOICE DETAILS */}
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>Invoice Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label>Transport Charge %</Label>
+                <Label>Invoice No.</Label>
+                <Input value={invoiceNumber} readOnly className="bg-gray-100 font-bold" />
+              </div>
+              <div>
+                <Label>Invoice Date</Label>
+                <Input
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Date & Time of Supply</Label>
+                <Input
+                  type="datetime-local"
+                  value={dateTimeOfSupply}
+                  onChange={(e) => setDateTimeOfSupply(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label>Transport Mode</Label>
+                <Select value={transportMode} onValueChange={setTransportMode}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select transport mode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Courier">Courier</SelectItem>
+                    <SelectItem value="Porter">Porter</SelectItem>
+                    <SelectItem value="Road Transport">Road Transport</SelectItem>
+                    <SelectItem value="Air Transport">Air Transport</SelectItem>
+                    <SelectItem value="Sea Transport">Sea Transport</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Transporter Name</Label>
+                <Input
+                  value={transporterName}
+                  onChange={(e) => setTransporterName(e.target.value)}
+                  placeholder="Enter transporter name"
+                />
+              </div>
+
+              <div>
+                <Label>Vehicle No.</Label>
+                <Input
+                  value={vehicleNo}
+                  onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
+                  placeholder="NA"
+                />
+              </div>
+
+              <div>
+                <Label>Place of Supply</Label>
+                <Input value={placeOfSupply} onChange={(e) => setPlaceOfSupply(e.target.value)} />
+              </div>
+
+              <div>
+                <Label>Payment Terms</Label>
+                <Input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} />
+              </div>
+
+              <div>
+                <Label>E-Way Bill No.</Label>
+                <Input
+                  value={eWayBillNo}
+                  onChange={(e) => setEWayBillNo(e.target.value)}
+                  placeholder="Enter E-Way Bill Number"
+                />
+              </div>
+
+              <div>
+                <Label>E-Way Bill Date</Label>
+                <Input
+                  type="date"
+                  value={eWayBillDate}
+                  onChange={(e) => setEWayBillDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Remarks</Label>
+              <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* TRANSPORT CHARGE */}
+        <Card className="bg-blue-50 border-2 border-blue-200 mb-4">
+          <CardHeader>
+            <CardTitle className="text-lg">Transport Charge</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4">
+              <Label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={transportChargeType === "fixed"}
+                  onChange={() => setTransportChargeType("fixed")}
+                  className="w-4 h-4"
+                />
+                Fixed Amount
+              </Label>
+              <Label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={transportChargeType === "percent"}
+                  onChange={() => setTransportChargeType("percent")}
+                  className="w-4 h-4"
+                />
+                Percentage
+              </Label>
+            </div>
+
+            {transportChargeType === "fixed" ? (
+              <div>
+                <Label>Fixed Transport Charge ({symbol})</Label>
+                <Input
+                  type="number"
+                  value={transportCharge}
+              onChange={(e) => setTransportCharge(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Enter fixed amount"
+                />
+              </div>
+            ) : (
+              <div>
+                <Label>Transport Charge Percentage (%)</Label>
                 <Input
                   type="number"
                   value={transportChargePercent}
-                  onChange={e => setTransportChargePercent(e.target.value ? Number(e.target.value) : "")}
-                  min={0} step={0.01}
+                  onChange={(e) => setTransportChargePercent(e.target.value)}
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  placeholder="Enter percentage"
                 />
-                <p className="text-xs text-muted-foreground mt-1">Amount: {currencySymbol}{fmt(transportCharge)}</p>
               </div>
-            </CardContent>
-          </Card>
+            )}
 
-          {/* References & Version */}
-          <Card>
-            <CardHeader><CardTitle>References &amp; Version</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <Label>Your Ref</Label>
-                <Input
-                  value={formData.yourRef}
-                  onChange={e => setFormData(p => ({ ...p, yourRef: e.target.value }))}
-                  placeholder="Client Reference"
-                />
-              </div>
-              <div>
-                <Label>Our Ref</Label>
-                <Input
-                  value={formData.ourRef}
-                  onChange={e => setFormData(p => ({ ...p, ourRef: e.target.value }))}
-                  placeholder="Internal reference"
-                />
-              </div>
-            </CardContent>
-          </Card>
+            <div className="text-sm font-medium text-blue-800">
+              Calculated Transport Charge: {symbol}
+              {formatAmount(calculatedTransportCharge)}
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Quotation Details */}
-          <Card>
-            <CardHeader><CardTitle>Quotation Details</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <Label>SQ Date</Label>
-                <Input
-                  type="date"
-                  value={formData.quoteDate}
-                  onChange={e => setFormData(p => ({ ...p, quoteDate: e.target.value }))}
-                />
+        {/* GST CONFIGURATION */}
+        <Card className="bg-green-50 border-2 border-green-200 mb-4">
+          <CardHeader>
+            <CardTitle className="text-lg">GST Configuration</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="applyCGST"
+                    checked={applyCGST}
+                    onChange={(e) => setApplyCGST(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <Label htmlFor="applyCGST" className="cursor-pointer text-base font-bold">
+                    Apply CGST
+                  </Label>
+                </div>
+                <div>
+                  <Label>CGST Percentage (%)</Label>
+                  <Input
+                    type="number"
+                    value={cgstPercent}
+               onChange={(e) => setCgstPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                    min={0}
+                    step={0.1}
+                    disabled={!applyCGST}
+                    className="font-bold"
+                  />
+                </div>
               </div>
-              <div>
-                <Label>Quote Validity</Label>
-                <Input
-                  value={formData.validity}
-                  onChange={e => setFormData(p => ({ ...p, validity: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Mode of Despatch</Label>
-                <Select
-                  value={formData.modeOfDispatch}
-                  onValueChange={v => setFormData(p => ({ ...p, modeOfDispatch: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select dispatch mode" /></SelectTrigger>
-                  <SelectContent>
-                    {dispatchModes.map(mode => (
-                      <SelectItem key={mode} value={mode}>{mode}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Delivery Term</Label>
-                <Select
-                  value={formData.deliveryTerm}
-                  onValueChange={v => setFormData(p => ({ ...p, deliveryTerm: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select delivery term" /></SelectTrigger>
-                  <SelectContent>
-                    {deliveryTerms.map(term => (
-                      <SelectItem key={term} value={term}>{term}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="col-span-2">
-                <Label>Payment Terms</Label>
-                <Select
-                  value={formData.paymentTerms}
-                  onValueChange={v => setFormData(p => ({ ...p, paymentTerms: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select payment terms" /></SelectTrigger>
-                  <SelectContent>
-                    {paymentTerms.map(term => (
-                      <SelectItem key={term} value={term}>{term}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Line Items */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Line Items</CardTitle>
-                <Button size="sm" onClick={addLineItem}>
-                  <Plus className="h-4 w-4 mr-2" /> Add Item
-                </Button>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="applySGST"
+                    checked={applySGST}
+                    onChange={(e) => setApplySGST(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <Label htmlFor="applySGST" className="cursor-pointer text-base font-bold">
+                    Apply SGST
+                  </Label>
+                </div>
+                <div>
+                  <Label>SGST Percentage (%)</Label>
+                  <Input
+                    type="number"
+                    value={sgstPercent}
+            onChange={(e) => setSgstPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                    min={0}
+                    step={0.1}
+                    disabled={!applySGST}
+                    className="font-bold"
+                  />
+                </div>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {lineItems.map((item, i) => (
-                <div key={i} className="border rounded-lg p-5 bg-gradient-to-r from-blue-50 to-gray-50 shadow-sm">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <Label>Product Code</Label>
-                      <Select
-                        value={item.productCode}
-                        onValueChange={v => updateLineItem(i, "productCode", v)}
-                      >
-                        <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                        <SelectContent>
-                          {flattenedProducts.map(p => (
-                            <SelectItem key={p.productCode} value={p.productCode}>
-                              <div>
-                                <div className="font-medium">{p.parentName}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  Code: {p.productCode} | {p.category} {p.group} | ₹{fmt(p.unitPrice)} | Stock: {p.stockQty}
-                                </div>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Description</Label>
-                      <Textarea
-                        value={item.productDescription}
-                        onChange={e => updateLineItem(i, "productDescription", e.target.value)}
-                        rows={2}
-                      />
-                      {item.size && (
-                        <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                          <Ruler className="h-3 w-3" />
-                          <span>{item.size}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <Label>UOM</Label>
-                      <Input value={item.uom} readOnly className="bg-gray-100" />
-                    </div>
-                    <div>
-                      <Label>HSN</Label>
-                      <Input value={item.hsnCode} readOnly className="bg-gray-100" />
-                    </div>
-                    <div>
-                      <Label>Qty</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={item.qty}
-                        onChange={e => updateLineItem(i, "qty", e.target.value ? Number(e.target.value) : "")}
-                      />
-                    </div>
-                    <div>
-                      <Label>Rate ({currencySymbol})</Label>
-                      <Input
-                        type="number"
-                        step={0.01}
-                        value={fmt(item.unitRate)}
-                        onChange={e => updateLineItem(i, "unitRate", Number(e.target.value))}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 mt-4">
-                    <div>
-                      <Label>Disc %</Label>
-                      <Input
-                        type="number"
-                        value={item.discount ?? ""}
-                        onChange={e => updateLineItem(i, "discount", e.target.value ? Number(e.target.value) : "")}
-                      />
-                    </div>
-                    <div className="flex items-end">
-                      <div>
-                        <Label>Net</Label>
-                        <div className="text-xl font-bold text-blue-700">
-                          {currencySymbol}{fmt(item.netAmount)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex justify-end">
-                      <Button size="icon" variant="ghost" onClick={() => removeLineItem(i)}>
-                        <Trash2 className="h-5 w-5 text-red-600" />
-                      </Button>
-                    </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="applyIGST"
+                    checked={applyIGST}
+                    onChange={(e) => setApplyIGST(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <Label htmlFor="applyIGST" className="cursor-pointer text-base font-bold">
+                    Apply IGST
+                  </Label>
+                </div>
+                <div>
+                  <Label>IGST Percentage (%)</Label>
+                  <Input
+                    type="number"
+                    value={igstPercent}
+             onChange={(e) => setIgstPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                    min={0}
+                    step={0.1}
+                    disabled={!applyIGST}
+                    className="font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 p-4 bg-white border-2 border-green-300 rounded">
+              <h3 className="font-bold text-lg mb-2">Live Tax Calculation Preview</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Items Total:</span>
+                  <div className="font-bold text-lg">
+                    {symbol}
+                    {formatAmount(lineItems.reduce((s, i) => s + i.taxableValue, 0))}
                   </div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Totals */}
-          <Card>
-            <CardContent className="pt-6 text-right text-lg font-semibold space-y-2">
-              <div>Subtotal: {currencySymbol}{fmt(subtotal)}</div>
-              {includeGST && currentCurrency === "INR" && (
-                <>
-                  <div>CGST {cgstPercent}%: {currencySymbol}{fmt(cgst)}</div>
-                  <div>SGST {sgstPercent}%: {currencySymbol}{fmt(sgst)}</div>
-                </>
-              )}
-              {Number(transportChargePercent) > 0 && (
-                <div>Transport Charge {transportChargePercent}%: {currencySymbol}{fmt(transportCharge)}</div>
-              )}
-              <div className="text-2xl text-blue-700 border-t-2 border-blue-700 pt-2">
-                Grand Total: {currencySymbol}{fmt(total)}
+                <div>
+                  <span className="text-gray-600">Transport:</span>
+                  <div className="font-bold text-lg">
+                    {symbol}
+                    {formatAmount(calculatedTransportCharge)}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-600">Taxable Amount:</span>
+                  <div className="font-bold text-lg">
+                    {symbol}
+                    {formatAmount(taxable)}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-600">Grand Total:</span>
+                  <div className="font-bold text-xl text-green-700">
+                    {symbol}
+                    {formatAmount(total)}
+                  </div>
+                </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Notes */}
-          <Card>
-            <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
-            <CardContent>
-              <Label>Remarks</Label>
-              <Textarea
-                value={formData.remarks}
-                onChange={e => setFormData(p => ({ ...p, remarks: e.target.value }))}
-                rows={3}
-                className="mb-4"
-              />
-              <Label>Comments</Label>
-              <Textarea
-                value={formData.comments}
-                onChange={e => setFormData(p => ({ ...p, comments: e.target.value }))}
-                rows={3}
-              />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Live Preview */}
-        <div className="w-full mb-8">
-          <div className="bg-white rounded-lg shadow-2xl border overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white p-4 text-center font-bold text-lg">
-              Live Preview — A4 Landscape
-              {isWalkInMode && (
-                <span className="ml-3 inline-block bg-red-600 text-white px-4 py-1 rounded-full text-sm font-bold">
-                  CASH SALE
-                </span>
-              )}
-              <div className="text-sm mt-1">
-                Currency: {currentCurrency} {currencySymbol}
+              <div className="grid grid-cols-3 gap-4 mt-3 pt-3 border-t">
+                {applyCGST && (
+                  <div className="bg-blue-50 p-2 rounded">
+                    <span className="text-gray-600 text-xs">CGST ({cgstPercent}%)</span>
+                    <div className="font-bold text-blue-700">
+                      {symbol}
+                      {formatAmount(cgst)}
+                    </div>
+                  </div>
+                )}
+                {applySGST && (
+                  <div className="bg-blue-50 p-2 rounded">
+                    <span className="text-gray-600 text-xs">SGST ({sgstPercent}%)</span>
+                    <div className="font-bold text-blue-700">
+                      {symbol}
+                      {formatAmount(sgst)}
+                    </div>
+                  </div>
+                )}
+                {applyIGST && (
+                  <div className="bg-blue-50 p-2 rounded">
+                    <span className="text-gray-600 text-xs">IGST ({igstPercent}%)</span>
+                    <div className="font-bold text-blue-700">
+                      {symbol}
+                      {formatAmount(igst)}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-            <div ref={printRef}>
-              <QuotationPrintTemplate quotation={quotationData} />
-            </div>
-          </div>
-        </div>
-      </div>
+          </CardContent>
+        </Card>
 
-      {/* ── Customer Dialog ── */}
-      <Dialog open={customerDialogOpen} onOpenChange={setCustomerDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-screen overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Add New Customer</DialogTitle>
-            <div className="flex items-center gap-4 bg-blue-50 px-6 py-4 rounded-xl border-2 border-blue-200">
-              <span className="text-sm font-medium">Customer Code</span>
-              <code className="text-2xl font-bold text-blue-600">{customerCode}</code>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => {
-                  navigator.clipboard.writeText(customerCode);
-                  setCopied(true);
-                  toast.success("Copied!");
-                  setTimeout(() => setCopied(false), 2000);
+        {/* MULTI-PAGE PDF PREVIEW */}
+        <div
+          ref={printRef}
+          style={{
+            media: "print",
+            "@page": { size: "A4 landscape", margin: 0 },
+            "@media print": {
+              "print-color-adjust": "exact",
+              "-webkit-print-color-adjust": "exact",
+              margin: 0,
+              padding: 0,
+            },
+            ".page-break": {
+              "page-break-after": "always",
+              "break-after": "page",
+              margin: 0,
+              padding: 0,
+              boxSizing: "border-box",
+            },
+          }}
+        >
+          {pages.map((pageItems, pageIndex) => (
+            <div
+              key={pageIndex}
+              className={pageIndex < totalPages - 1 ? "page-break" : ""}
+              style={{
+                width: "297mm",
+                height: "210mm",
+                background: "#ffffff",
+                margin: "0 auto 20px",
+                padding: 0,
+                boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                fontFamily: "Arial, sans-serif",
+                position: "relative",
+                boxSizing: "border-box",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  border: "3px solid #000",
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
                 }}
               >
-                {copied ? <Check className="h-5 w-5 text-green-600" /> : <Copy className="h-5 w-5" />}
-              </Button>
-            </div>
-          </DialogHeader>
-          <Tabs defaultValue="info" className="mt-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="info">Basic Info</TabsTrigger>
-              <TabsTrigger value="addresses">Addresses</TabsTrigger>
-              <TabsTrigger value="bank">Bank Details</TabsTrigger>
-            </TabsList>
+                {/* Header on every page */}
+                <div style={{ flexShrink: 0 }}>{CompanyHeader}</div>
 
-            <TabsContent value="info" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label>Company Name</Label>
-                  <Input
-                    value={newCustomer.companyName}
-                    onChange={e => setNewCustomer(p => ({ ...p, companyName: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>Contact Person</Label>
-                  <Input
-                    value={newCustomer.contactPerson}
-                    onChange={e => setNewCustomer(p => ({ ...p, contactPerson: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    value={newCustomer.email}
-                    onChange={e => setNewCustomer(p => ({ ...p, email: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>Mobile Number</Label>
-                  <Input
-                    value={newCustomer.phone}
-                    onChange={e => setNewCustomer(p => ({ ...p, phone: digitsOnly(limit(e.target.value, 10)) }))}
-                    maxLength={10}
-                  />
-                </div>
-                <div>
-                  <Label>Currency</Label>
-                  <Select
-                    value={newCustomer.currency}
-                    onValueChange={v => setNewCustomer(p => ({ ...p, currency: v }))}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {currencies.map(c => (
-                        <SelectItem key={c.code} value={c.code}>{c.name} {c.symbol}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>GST Number</Label>
-                  <Input
-                    value={newCustomer.gst || ""}
-                    onChange={e => setNewCustomer(p => ({ ...p, gst: toUpper(limit(e.target.value, 15)) }))}
-                    maxLength={15}
-                  />
-                </div>
-                <div>
-                  <Label>PAN</Label>
-                  <Input
-                    value={newCustomer.pan || ""}
-                    onChange={e => setNewCustomer(p => ({ ...p, pan: toUpper(limit(e.target.value, 10)) }))}
-                    maxLength={10}
-                  />
-                </div>
-                <div>
-                  <Label>CIN</Label>
-                  <Input
-                    value={newCustomer.cin || ""}
-                    onChange={e => setNewCustomer(p => ({ ...p, cin: toUpper(limit(e.target.value, 21)) }))}
-                    maxLength={21}
-                  />
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="addresses">
-              <Tabs defaultValue="billing">
-                <TabsList className="mb-4">
-                  <TabsTrigger value="billing">Billing Addresses</TabsTrigger>
-                  <TabsTrigger value="shipping">Shipping Addresses</TabsTrigger>
-                </TabsList>
-                <TabsContent value="billing">
-                  <Button className="mb-4" onClick={() => openAddressDialog(undefined, "billing")}>
-                    <Plus className="h-4 w-4 mr-2" /> Add Billing Address
-                  </Button>
-                  {(newCustomer.addresses || []).filter(a => a.type === "billing").map(addr => (
-                    <div
-                      key={addr.id}
-                      className={`p-4 rounded-lg border mb-3 ${addr.isDefault ? "border-green-500 bg-green-50" : "border-gray-300"}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <strong>{addr.label}</strong>
-                          {addr.isDefault && (
-                            <span className="text-xs bg-green-600 text-white px-2 py-1 rounded ml-2">DEFAULT</span>
-                          )}
-                          <p className="text-sm">
-                            {addr.street}{addr.area ? `, ${addr.area}` : ""}, {addr.city}, {addr.state} - {addr.pincode}<br />
-                            {addr.country}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="icon" variant="ghost" onClick={() => openAddressDialog(addr)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" onClick={() => deleteAddress(addr.id)}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {(newCustomer.addresses || []).filter(a => a.type === "billing").length === 0 && (
-                    <p className="text-muted-foreground text-sm">No billing addresses added yet.</p>
-                  )}
-                </TabsContent>
-                <TabsContent value="shipping">
-                  <Button className="mb-4" onClick={() => openAddressDialog(undefined, "shipping")}>
-                    <Plus className="h-4 w-4 mr-2" /> Add Shipping Address
-                  </Button>
-                  {(newCustomer.addresses || []).filter(a => a.type === "shipping").map(addr => (
-                    <div
-                      key={addr.id}
-                      className={`p-4 rounded-lg border mb-3 ${addr.isDefault ? "border-green-500 bg-green-50" : "border-gray-300"}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <strong>{addr.label}</strong>
-                          {addr.isDefault && (
-                            <span className="text-xs bg-green-600 text-white px-2 py-1 rounded ml-2">DEFAULT</span>
-                          )}
-                          <p className="text-sm">
-                            {addr.street}{addr.area ? `, ${addr.area}` : ""}, {addr.city}, {addr.state} - {addr.pincode}<br />
-                            {addr.country}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="icon" variant="ghost" onClick={() => openAddressDialog(addr)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" onClick={() => deleteAddress(addr.id)}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {(newCustomer.addresses || []).filter(a => a.type === "shipping").length === 0 && (
-                    <p className="text-muted-foreground text-sm">No shipping addresses added yet.</p>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </TabsContent>
-
-            <TabsContent value="bank">
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <Label>Bank Name</Label>
-                  <Input
-                    value={newCustomer.bankName || ""}
-                    onChange={e => setNewCustomer(p => ({ ...p, bankName: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>Account No</Label>
-                  <Input
-                    value={newCustomer.bankAccountNo || ""}
-                    onChange={e => setNewCustomer(p => ({ ...p, bankAccountNo: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label>IFSC</Label>
-                  <Input
-                    value={newCustomer.bankIfsc || ""}
-                    onChange={e => setNewCustomer(p => ({ ...p, bankIfsc: toUpper(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <Label>Branch</Label>
-                  <Input
-                    value={newCustomer.bankBranch || ""}
-                    onChange={e => setNewCustomer(p => ({ ...p, bankBranch: e.target.value }))}
-                  />
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-          <div className="flex justify-end gap-4 mt-6">
-            <Button variant="outline" onClick={() => setCustomerDialogOpen(false)}>Cancel</Button>
-            <Button onClick={saveNewCustomer}>Create &amp; Select Customer</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Address Dialog ── */}
-      <Dialog open={addressDialogOpen} onOpenChange={setAddressDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingAddress ? "Edit" : "Add"}{" "}
-              {addressForm.type === "billing" ? "Billing" : "Shipping"} Address
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Label</Label>
-              <Input
-                value={addressForm.label}
-                onChange={e => setAddressForm(p => ({ ...p, label: e.target.value }))}
-                placeholder="e.g., Head Office"
-              />
-            </div>
-            <div>
-              <Label>Street</Label>
-              <Input
-                value={addressForm.street}
-                onChange={e => setAddressForm(p => ({ ...p, street: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label>Area</Label>
-              <Input
-                value={addressForm.area || ""}
-                onChange={e => setAddressForm(p => ({ ...p, area: e.target.value }))}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>City</Label>
-                <Input
-                  value={addressForm.city}
-                  onChange={e => setAddressForm(p => ({ ...p, city: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>State</Label>
-                <Select
-                  value={addressForm.state}
-                  onValueChange={v => setAddressForm(p => ({ ...p, state: v }))}
+                {/* Body Content */}
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: 0,
+                    overflow: "hidden",
+                  }}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {indianStates.map(s => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {/* INVOICE DETAILS & CUSTOMER DETAILS - Only on first page */}
+                  {pageIndex === 0 && (
+                    <div style={{ flexShrink: 0 }}>
+                      {/* Single meta grid - 4 columns */}
+                      <div style={{ borderBottom: "1px solid #000" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", width: "18%", color: "#555" }}>Invoice No.</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", width: "32%", fontWeight: 900, fontSize: "12px" }}>{invoiceNumber}</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", width: "18%", color: "#555" }}>Dated</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", width: "32%", fontWeight: 900, fontSize: "12px" }}>{invoiceDate ? format(new Date(invoiceDate), "d-MMM-yy") : ""}</td>
+                            </tr>
+                            <tr>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Delivery Note</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px" }}></td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Mode/Terms of Payment</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", fontWeight: 900 }}>{paymentTerms}</td>
+                            </tr>
+                            <tr>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Customer PO No.</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", fontWeight: 800 }}>{customerPONo}</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Customer PO Date</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", fontWeight: 800 }}>{customerPODate ? format(new Date(customerPODate), "d-MMM-yy") : ""}</td>
+                            </tr>
+                            <tr>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Buyer's Order No.</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px" }}></td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Dated</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px" }}></td>
+                            </tr>
+                            <tr>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Dispatch Doc No.</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px" }}></td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Delivery Note Date</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px" }}></td>
+                            </tr>
+                            <tr>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Dispatched through</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", fontWeight: 900 }}>{transportMode}</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Destination</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", fontWeight: 900 }}>{placeOfSupply}</td>
+                            </tr>
+                            <tr>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>Terms of Delivery</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px" }}></td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", color: "#555" }}>E-Way Bill No.</td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px" }}>{eWayBillNo}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Address section: Left=Company+ShipTo | Right=BillTo */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "2px solid #000" }}>
+                        <div style={{ borderRight: "1px solid #000", display: "flex", flexDirection: "column" }}>
+                          <div style={{ padding: "5px 8px", borderBottom: "1px solid #ccc", fontSize: "9px" }}>
+                            <div style={{ fontWeight: 900, fontSize: "10px", marginBottom: "2px" }}>Fluoro Automation Seals Pvt Ltd</div>
+                            <div style={{ fontWeight: 600, lineHeight: 1.4 }}>3/180, Rajiv Gandhi Road, Mettukuppam, Chennai Tamil Nadu 600097 India<br/>Phone: 9841175097 | Email: fas@fluoroautomationseals.com<br/>GSTIN/UIN: 33AAECF2716M1ZO | State Name: Tamil Nadu, Code: 33</div>
+                          </div>
+                          <div style={{ padding: "5px 8px", fontSize: "9px" }}>
+                            <div style={{ fontWeight: 700, color: "#555", marginBottom: "2px" }}>Ship to Add.</div>
+                            <div style={{ fontWeight: 900, fontSize: "10px" }}>{selectedOrder?.customerName || selectedCustomer?.companyName}</div>
+                            <pre style={{ fontFamily: "Arial, sans-serif", fontSize: "9px", whiteSpace: "pre-wrap", margin: "2px 0", fontWeight: 600, lineHeight: 1.3 }}>{getFormattedCustomerAddress(selectedCustomer, shippingAddress || billingAddress, 'shipping')}</pre>
+                            <div style={{ fontWeight: 700 }}>GSTIN/UIN: {selectedOrder?.customerGST || selectedCustomer?.gst}</div>
+                          </div>
+                        </div>
+                        <div style={{ padding: "5px 8px", fontSize: "9px" }}>
+                          <div style={{ fontWeight: 700, color: "#555", marginBottom: "2px" }}>Buyer (Bill to)</div>
+                          <div style={{ fontWeight: 900, fontSize: "10px" }}>{selectedOrder?.customerName || selectedCustomer?.companyName}</div>
+                          <pre style={{ fontFamily: "Arial, sans-serif", fontSize: "9px", whiteSpace: "pre-wrap", margin: "2px 0", fontWeight: 600, lineHeight: 1.3 }}>{getFormattedCustomerAddress(selectedCustomer, billingAddress, 'billing')}</pre>
+                          <div style={{ fontWeight: 700 }}>GSTIN/UIN: {selectedOrder?.customerGST || selectedCustomer?.gst}</div>
+                          <div style={{ fontWeight: 700 }}>State Name: {billingAddress?.state || "Tamil Nadu"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Continuation header for pages after first */}
+                  {pageIndex > 0 && (
+                    <div style={{ padding: "8px 16px", borderBottom: "2px solid #000", flexShrink: 0 }}>
+                      <h3 style={{ fontSize: "13px", fontWeight: 900, textAlign: "center", marginBottom: "3px" }}>INVOICE - {invoiceNumber} (Continued)</h3>
+                      <p style={{ fontSize: "9px", textAlign: "center", color: "#666", margin: 0 }}>Page {pageIndex + 1} of {totalPages}</p>
+                    </div>
+                  )}
+
+                  {/* ITEMS TABLE */}
+                  <div
+                    style={{
+                      flex: 1,
+                      padding: 0,
+                      background: "#ffffff",
+                      minHeight: 0,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <table
+                      style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        fontSize: "8px",
+                        background: "#ffffff",
+                      }}
+                    >
+                      <thead style={{ background: "#ffffff" }}>
+                        <tr>
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "4%", fontWeight: 900 }}>
+                            Sl No
+                          </th>
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", width: "42%", fontWeight: 900 }}>
+                            Description of Goods and Services
+                          </th>
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "10%", fontWeight: 900 }}>
+                            HSN/SAC
+                          </th>
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "9%", fontWeight: 900 }}>
+                            Quantity
+                          </th>
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "right", width: "10%", fontWeight: 900 }}>
+                            Rate
+                          </th>
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "7%", fontWeight: 900 }}>
+                            per
+                          </th>
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "right", width: "6%", fontWeight: 900 }}>
+                            Disc. ₹
+                          </th>
+                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "right", width: "14%", fontWeight: 900 }}>
+                            Amount
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pageItems.map((item, i) => {
+                          const globalIndex = pageIndex * ITEMS_PER_PAGE + i
+                          return (
+                            <tr key={i} style={{ background: "#ffffff" }}>
+                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 700 }}>
+                                {globalIndex + 1}
+                              </td>
+                              <td style={{ border: "1px solid #000", padding: "3px 4px", fontSize: "8.5px", lineHeight: 1.3 }}>
+                                <div style={{ fontWeight: 800 }}>{item.partCode}</div>
+                                <div style={{ fontSize: "8px", color: "#222", fontWeight: 600 }}>{item.description}</div>
+                              </td>
+                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 700 }}>
+                                {item.hsnCode}
+                              </td>
+                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 800 }}>
+                                <span style={{ marginRight: '4px' }}>{item.invoicedQty}</span>
+                                <span style={{ fontSize: '7px' }}>{item.uom}</span>
+                              </td>
+                              <td style={{ border: "1px solid #000", padding: "3px 4px", textAlign: "right", fontWeight: 700 }}>
+                                {formatAmount(item.rate)}
+                              </td>
+                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 700 }}>
+                                {item.uom}
+                              </td>
+                              <td style={{ border: "1px solid #000", padding: "3px 4px", textAlign: "right", fontWeight: 700 }}>
+                                {formatAmount(item.discount)}
+                              </td>
+                              <td style={{ border: "1px solid #000", padding: "3px 4px", textAlign: "right", fontWeight: 900, background: "#ffffff" }}>
+                                {formatAmount(item.taxableValue)}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Bottom Section - Only on last page */}
+                  {pageIndex === totalPages - 1 && (
+                    <>
+                      {/* TOTAL ROW */}
+                      <div style={{ flexShrink: 0, background: "#ffffff" }}>
+                        <table
+                          style={{
+                            width: "100%",
+                            borderCollapse: "collapse",
+                            fontSize: "8px",
+                            background: "#ffffff",
+                          }}
+                        >
+                          <tbody>
+                            <tr style={{ fontWeight: 900, background: "#ffffff" }}>
+                              <td colSpan={3} style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "right", fontSize: "10px" }}>
+                                Total
+                              </td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "center", fontSize: "10px" }}>
+                                {lineItems.reduce((s, i) => s + i.invoicedQty, 0)} {lineItems[0]?.uom || ""}
+                              </td>
+                              <td colSpan={3} style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "right", fontSize: "10px" }}>
+                              </td>
+                              <td style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "right", fontSize: "10px" }}>
+                                {symbol}{formatAmount(lineItems.reduce((s, i) => s + i.taxableValue, 0))}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* TAX BREAKUP TABLE (HSN/SAC वाइज) */}
+                      <div style={{ borderTop: "2px solid #000", background: "#ffffff", flexShrink: 0 }}>
+                        <div style={{ padding: "4px 8px", fontSize: "9px", display: "flex", justifyContent: "space-between" }}>
+                          <div>
+                            <span>Amount Chargeable (in words)</span><br />
+                            <strong style={{ fontWeight: 900 }}>INR {amountInWords} Only</strong>
+                          </div>
+                          <div style={{ textAlign: "right", fontStyle: "italic", fontSize: "8px", color: "#666" }}>
+                            E. & O.E
+                          </div>
+                        </div>
+
+                        <div style={{ borderTop: "1px solid #000" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8px", background: "#ffffff" }}>
+                            <thead style={{ borderBottom: "1px solid #000" }}>
+                              <tr>
+                                <th rowSpan={2} style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "left", width: "40%", fontWeight: 900 }}>HSN/SAC</th>
+                                <th rowSpan={2} style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right", width: "15%", fontWeight: 900 }}>Taxable Value</th>
+                                {applyCGST && <th colSpan={2} style={{ borderRight: "1px solid #000", borderBottom: '1px solid #000', padding: "4px", textAlign: "center", fontWeight: 900 }}>Central Tax</th>}
+                                {applySGST && <th colSpan={2} style={{ borderRight: "1px solid #000", borderBottom: '1px solid #000', padding: "4px", textAlign: "center", fontWeight: 900 }}>State Tax</th>}
+                                {applyIGST && <th colSpan={2} style={{ borderRight: "1px solid #000", borderBottom: '1px solid #000', padding: "4px", textAlign: "center", fontWeight: 900 }}>Integrated Tax</th>}
+                                <th rowSpan={2} style={{ padding: "4px", textAlign: "right", width: "15%", fontWeight: 900 }}>Total Tax Amount</th>
+                              </tr>
+                              <tr>
+                                {applyCGST && <><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "center" }}>Rate</th><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "right" }}>Amount</th></>}
+                                {applySGST && <><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "center" }}>Rate</th><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "right" }}>Amount</th></>}
+                                {applyIGST && <><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "center" }}>Rate</th><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "right" }}>Amount</th></>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {lineItems.map((item, i) => {
+                                const itemTaxTotal = (applyCGST ? item.cgstAmount : 0) + (applySGST ? item.sgstAmount : 0) + (applyIGST ? item.igstAmount : 0);
+                                if (itemTaxTotal === 0) return null;
+                                return (
+                                  <tr key={i}>
+                                    <td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "left" }}>{item.hsnCode || "-"}</td>
+                                    <td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.taxableValue)}</td>
+                                    {applyCGST && <><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "center" }}>{item.cgstPercent.toFixed(1)}%</td><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.cgstAmount)}</td></>}
+                                    {applySGST && <><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "center" }}>{item.sgstPercent.toFixed(1)}%</td><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.sgstAmount)}</td></>}
+                                    {applyIGST && <><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "center" }}>{item.igstPercent.toFixed(1)}%</td><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.igstAmount)}</td></>}
+                                    <td style={{ padding: "2px 4px", textAlign: "right" }}>{formatAmount(itemTaxTotal)}</td>
+                                  </tr>
+                                );
+                              })}
+                              <tr style={{ borderTop: "1px solid #000", fontWeight: 900 }}>
+                                <td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>Total</td>
+                                <td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(taxable)}</td>
+                                {applyCGST && <><td style={{ borderRight: "1px solid #000", padding: "4px" }}></td><td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(cgst)}</td></>}
+                                {applySGST && <><td style={{ borderRight: "1px solid #000", padding: "4px" }}></td><td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(sgst)}</td></>}
+                                {applyIGST && <><td style={{ borderRight: "1px solid #000", padding: "4px" }}></td><td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(igst)}</td></>}
+                                <td style={{ padding: "4px", textAlign: "right" }}>{formatAmount((applyCGST ? cgst : 0) + (applySGST ? sgst : 0) + (applyIGST ? igst : 0))}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* TAX AMOUNT IN WORDS */}
+                      <div style={{ borderTop: "1px solid #000", padding: "4px 8px", fontSize: "9px" }}>
+                        <span style={{ fontSize: "8px" }}>Tax Amount (in digits) :</span><br />
+                        <strong style={{ fontWeight: 900 }}>INR {formatAmount((applyCGST ? cgst : 0) + (applySGST ? sgst : 0) + (applyIGST ? igst : 0))}</strong>
+                      </div>
+
+                      {/* BOTTOM PAN, BANK, SIGNATURE */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: "1px solid #000", background: "#ffffff", flexShrink: 0 }}>
+                        <div style={{ borderRight: "1px solid #000", padding: "6px 8px", fontSize: "9px" }}>
+                          <p style={{ margin: "0 0 4px 0" }}>
+                            Company's PAN: <strong style={{ fontWeight: 900 }}>{selectedOrder?.companyPAN || "AAACF3485R"}</strong>
+                          </p>
+                          <div style={{ marginTop: "10px" }}>
+                            <p style={{ margin: "0 0 2px 0", textDecoration: "underline", fontWeight: 700 }}>Declaration</p>
+                            <p style={{ margin: 0, lineHeight: 1.4, fontStyle: "italic", fontSize: "8px" }}>
+                              We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+                            </p>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", fontSize: "9px" }}>
+                          <div style={{ padding: "6px 8px", borderBottom: "1px solid #000", flex: 1 }}>
+                            <p style={{ margin: "0 0 2px 0", textDecoration: "underline", fontWeight: 700 }}>Company's Bank Details</p>
+                            <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: "2px", fontWeight: 600 }}>
+                              <div>Bank Name</div><div>: <strong>HDFC Bank Ltd</strong></div>
+                              <div>A/c No.</div><div>: <strong>50200021300057</strong></div>
+                              <div>Branch & IFS Code</div><div>: <strong>Mettukuppam & HDFC0001000</strong></div>
+                            </div>
+                          </div>
+                          <div style={{ padding: "6px 8px", textAlign: "right", display: "flex", flexDirection: "column", justifyContent: "space-between", height: "80px" }}>
+                            <p style={{ margin: 0, fontWeight: 900 }}>for Fluoro Automation Seals Pvt Ltd</p>
+                            <div style={{ marginTop: "auto" }}>
+                              <p style={{ margin: 0, fontWeight: 700, fontSize: "8px" }}>Authorised Signatory</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Pincode</Label>
-                <Input
-                  value={addressForm.pincode}
-                  onChange={e => setAddressForm(p => ({ ...p, pincode: digitsOnly(limit(e.target.value, 6)) }))}
-                  maxLength={6}
-                />
-              </div>
-              <div>
-                <Label>Country</Label>
-                <Input
-                  value={addressForm.country}
-                  onChange={e => setAddressForm(p => ({ ...p, country: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="default"
-                checked={addressForm.isDefault}
-                onCheckedChange={c => setAddressForm(p => ({ ...p, isDefault: c as boolean }))}
-              />
-              <Label htmlFor="default" className="cursor-pointer">Set as default</Label>
-            </div>
-          </div>
-          <div className="flex justify-end gap-4 mt-6">
-            <Button variant="outline" onClick={() => setAddressDialogOpen(false)}>Cancel</Button>
-            <Button onClick={saveAddress}>Save Address</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          ))}
+        </div>
+      </div>
     </div>
-  );
+  )
 }

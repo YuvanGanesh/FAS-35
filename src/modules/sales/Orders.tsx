@@ -65,6 +65,7 @@ import {
   Ban,
 } from 'lucide-react';
 import { getAllRecords, createRecord, updateRecord, deleteRecord } from '@/services/firebase';
+import { getFormattedCustomerAddress } from '@/utils/addressUtils';
 
 // ────────────────────────────────────────────────
 // TYPES
@@ -327,7 +328,7 @@ const numberToWords = (num: number, currency: string): string => {
 // PRINT TEMPLATES (unchanged)
 // ────────────────────────────────────────────────
 
-const OrderAcknowledgementPrintTemplate = ({ order }: { order: SalesOrder }) => {
+const OrderAcknowledgementPrintTemplate = ({ order, customers }: { order: SalesOrder, customers: any[] }) => {
   const currencySymbol = CURRENCY_SYMBOLS[order.currency || 'INR'];
   const symbol = currencySymbol || '₹';
 
@@ -479,6 +480,7 @@ const OrderAcknowledgementPrintTemplate = ({ order }: { order: SalesOrder }) => 
                     <div>
                       <p style={{ fontWeight: '900', fontSize: '10px', textDecoration: 'underline', margin: '0 0 3px 0' }}>Customer:</p>
                       <p style={{ fontWeight: '900', fontSize: '10px', margin: '0 0 4px 0' }}>{order.customerName || '—'}</p>
+                      <pre style={{ fontFamily: 'Arial, sans-serif', fontSize: '8.5px', margin: '0 0 4px 0', whiteSpace: 'pre-wrap', fontWeight: '600' }}>{getFormattedCustomerAddress(customers.find((c: any) => c.id === order.customerId), order.customerAddress)}</pre>
                       <div style={{ fontSize: '7.5px', fontWeight: '700' }}>
                         <p style={{ margin: '1.5px 0' }}><strong>GSTIN:</strong> {order.customerGST || '—'}</p>
                         <p style={{ margin: '1.5px 0' }}><strong>PAN:</strong> {order.customerPAN || '—'}</p>
@@ -683,7 +685,7 @@ const OrderAcknowledgementPrintTemplate = ({ order }: { order: SalesOrder }) => 
   );
 };
 
-const ProformaInvoicePrintTemplate = ({ order }: { order: SalesOrder }) => {
+const ProformaInvoicePrintTemplate = ({ order, customers }: { order: SalesOrder, customers: any[] }) => {
   const currencySymbol = CURRENCY_SYMBOLS[order.currency || 'INR'];
   const symbol = currencySymbol || '₹';
 
@@ -835,6 +837,7 @@ const ProformaInvoicePrintTemplate = ({ order }: { order: SalesOrder }) => {
                     <div>
                       <p style={{ fontWeight: '900', fontSize: '10px', textDecoration: 'underline', margin: '0 0 3px 0' }}>Customer:</p>
                       <p style={{ fontWeight: '900', fontSize: '10px', margin: '0 0 4px 0' }}>{order.customerName || '—'}</p>
+                      <pre style={{ fontFamily: 'Arial, sans-serif', fontSize: '8.5px', margin: '0 0 4px 0', whiteSpace: 'pre-wrap', fontWeight: '600' }}>{getFormattedCustomerAddress(customers.find((c: any) => c.id === order.customerId), order.customerAddress)}</pre>
                       <div style={{ fontSize: '7.5px', fontWeight: '700' }}>
                         <p style={{ margin: '1.5px 0' }}><strong>GSTIN:</strong> {order.customerGST || '—'}</p>
                         <p style={{ margin: '1.5px 0' }}><strong>PAN:</strong> {order.customerPAN || '—'}</p>
@@ -1634,7 +1637,7 @@ export default function SalesOrders() {
         customerName: customer.companyName || 'Unknown Customer',
         customerGST: customer.gst || '',
         customerPAN: customer.pan || '',
-        customerAddress: customer.addresses?.[0]?.street || '',
+        customerAddress: getFormattedCustomerAddress(customer, null, 'billing'),
         customerPhone: customer.phone || '',
         customerEmail: customer.email || '',
         soDate: todayISO,
@@ -3190,8 +3193,8 @@ export default function SalesOrders() {
             {previewOrder && (
               <div data-pdf-template>
                 {previewType === 'oa'
-                  ? <OrderAcknowledgementPrintTemplate order={previewOrder} />
-                  : <ProformaInvoicePrintTemplate order={previewOrder} />
+                  ? <OrderAcknowledgementPrintTemplate order={previewOrder} customers={customers} />
+                  : <ProformaInvoicePrintTemplate order={previewOrder} customers={customers} />
                 }
               </div>
             )}

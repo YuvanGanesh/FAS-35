@@ -239,8 +239,8 @@ export default function Bonus() {
         perMonthWages,
         ctc,
         leaveDifference: Number(leaveDifference.toFixed(10)),
-        calculatedBonus: Number(calculatedBonus.toFixed(2)),
-        actualBonus: Number(actualBonus.toFixed(2)),
+        calculatedBonus: Math.round(calculatedBonus),
+        actualBonus: Math.round(actualBonus),
       };
     });
 
@@ -294,8 +294,8 @@ export default function Bonus() {
       'PER MONTH WAGES': calc.perMonthWages,
       'CTC': calc.ctc,
       'Leave Difference': calc.leaveDifference,
-      'Calculated Bonus': calc.calculatedBonus,
-      'Actual Bonus': calc.actualBonus,
+      'Calculated Bonus': Math.round(calc.calculatedBonus),
+      'Actual Bonus': Math.round(calc.actualBonus),
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -359,7 +359,7 @@ export default function Bonus() {
               <div>
                 <p className="text-sm text-emerald-700">Total Bonus Amount</p>
                 <p className="text-2xl font-bold text-emerald-900">
-                  ₹{totalBonusAmount.toLocaleString()}
+                  ₹{Math.round(totalBonusAmount).toLocaleString()}
                 </p>
               </div>
               <IndianRupee className="h-10 w-10 text-emerald-600 opacity-70" />
@@ -550,9 +550,9 @@ export default function Bonus() {
                         {(calc.leaveDifference * 100).toFixed(2)}%
                       </Badge>
                     </TableCell>
-                    <TableCell>₹{calc.calculatedBonus.toLocaleString()}</TableCell>
+                    <TableCell>₹{Math.round(calc.calculatedBonus).toLocaleString()}</TableCell>
                     <TableCell className="font-bold text-emerald-700 text-lg">
-                      ₹{calc.actualBonus.toLocaleString()}
+                      ₹{Math.round(calc.actualBonus).toLocaleString()}
                     </TableCell>
                   </TableRow>
                 ))

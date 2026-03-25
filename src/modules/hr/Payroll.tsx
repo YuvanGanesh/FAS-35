@@ -454,7 +454,7 @@ export default function PayrollPreparation() {
                 halfDays: half,
                 leaveDays: leave,
                 totalDays: totalDaysInMonth,
-                payableDays: fullWorkingDays + effectiveSundayCount + applicableHolidaysCount + (half * 0.5),
+                payableDays: present + sundayWorkedCount + (half * 0.5) + sundaysInMonth,
                 lopDays: totalDaysInMonth - (fullWorkingDays + half * 0.5), // Retaining old definition to not penalize paid sundays
                 perDayRate: Number((monthlySalary / totalDaysInMonth).toFixed(2)),
                 pdPay: 0,
@@ -723,15 +723,18 @@ export default function PayrollPreparation() {
     // Format amount with Indian comma separation
     const formatAmount = (num: number) => num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+    // Full Working Days uses payableDays + pdPay to match table exactly
+    const halfDaysSalary = Math.round(row.halfDays * row.perDayRate * 0.5);
+
     const rightDetails = [
       { label: 'Date of Joining', value: formatJoiningDate(emp.joiningDate || emp.dateJoined) },
       { label: 'Monthly Salary', value: `Rs. ${formatAmount(row.monthlySalary)}` },
       { label: 'Total Working Days', value: row.totalDays.toString() },
-      { label: 'Present Days', value: (row.actualPresentDays + row.halfDays * 0.5).toString() },
-      { label: 'Leaves Days', value: row.leaveDays.toString() },
-      { label: 'OT Hours', value: row.otMinutes > 0 ? otDisplay : '-' },
-      { label: 'Sundays in Month', value: row.sundaysInMonth.toString() },
-      { label: 'Sundays Worked', value: row.sundaysWorked > 0 ? row.sundaysWorked.toString() : '-' },
+      { label: 'Full Working Days', value: `${row.payableDays} (${formatAmount(row.pdPay)})` },
+      { label: 'Half Working Days', value: `${row.halfDays} (${formatAmount(halfDaysSalary)})` },
+      { label: 'Leave Days', value: row.leaveDays.toString() },
+      { label: 'Sunday Worked', value: row.sundaysWorked.toString() },
+      { label: 'OT Hours', value: row.otMinutes > 0 ? otDisplay : '0:00 hrs' },
     ];
 
     employeeDetails.forEach((item, index) => {
@@ -1047,6 +1050,7 @@ export default function PayrollPreparation() {
       'Basic',
       'HRA',
       'C.A',
+      'Other Allowance',
       'SP Allowance',
       'Total Gross',
       'PF',
@@ -1095,6 +1099,7 @@ export default function PayrollPreparation() {
         row.basic,
         row.hra,
         row.conveyance,
+        row.otherAllowance,
         row.additionalSpAllowance,
         row.totalEarnings,
         row.pf,
@@ -1199,8 +1204,6 @@ export default function PayrollPreparation() {
               </h1>
               <p className="text-gray-600 mt-1 text-sm lg:text-base">
                 Sunday pay based on daily salary rate<br/>
-                Pay Days = Present days + Sundays + H.D<br/>
-                P.D Pay = Pay Days * Daily Salary Rate
               </p>
             </div>
 
@@ -1322,9 +1325,7 @@ export default function PayrollPreparation() {
                       <TableHead className="font-bold min-w-[90px]">Attendance</TableHead>
                       <TableHead className="font-bold min-w-[90px]">Pending Hrs</TableHead>
                       <TableHead className="font-bold text-center min-w-[80px]">Days</TableHead>
-                      <TableHead className="font-bold text-center min-w-[80px]">
-                        Pay Days 
-                      </TableHead>
+                      <TableHead className="font-bold text-center min-w-[80px]">Pay Days</TableHead>
                       <TableHead className="font-bold text-center min-w-[80px]">Present Days</TableHead>
                       <TableHead className="font-bold min-w-[100px]">P.D Pay</TableHead>
                       <TableHead className="font-bold text-center min-w-[60px]">H.D</TableHead>
@@ -1411,9 +1412,7 @@ export default function PayrollPreparation() {
                             {pendingDisplay}
                           </TableCell>
                           <TableCell className="text-center">{row.totalDays}</TableCell>
-                          <TableCell className="text-center font-medium">
-                            {row.payableDays.toFixed(1)}
-                          </TableCell>
+                          <TableCell className="text-center font-medium">{row.payableDays.toFixed(1)}</TableCell>
                           <TableCell className="text-center">{row.presentDays}</TableCell>
                           <TableCell>₹{row.pdPay.toLocaleString('en-IN')}</TableCell>
                           <TableCell className="text-center">{row.halfDays}</TableCell>

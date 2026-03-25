@@ -21,6 +21,7 @@ import {
   deleteRecord,
 } from "@/services/firebase"
 import fas from "./fas.png"
+import { getFormattedCustomerAddress } from "@/utils/addressUtils"
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   INR: "₹",
@@ -774,6 +775,8 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
       customerId: selectedOrder?.customerId || selectedCustomer?.id || "",
       customerName: selectedOrder?.customerName || selectedCustomer?.companyName || "",
       customerGST: selectedOrder?.customerGST || selectedCustomer?.gst || "",
+      billingAddress,
+      shippingAddress,
       paymentTerms,
       transportMode,
       transporterName,
@@ -901,18 +904,6 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
     } catch {
       toast.error("PDF generation failed")
     }
-  }
-
-  // Format Address
-  const formatAddress = (addr: any) => {
-    if (!addr) return ""
-    const lines = [
-      addr.street || "",
-      addr.area || "",
-      addr.city ? `${addr.city}, ${addr.state} - ${addr.pincode}` : "",
-      addr.country || "",
-    ].filter(Boolean)
-    return lines.join("\n")
   }
 
   const billingAddress =
@@ -1647,23 +1638,39 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                       }}
                     >
                       {/* Left Column: Company Details & Billed To */}
-                      <div style={{ borderRight: "2px solid #000", display: "flex", flexDirection: "column" }}>
+                      {/* Left Column: Company Details & Ship To */}
+                      <div style={{ borderRight: "1px solid #000", display: "flex", flexDirection: "column" }}>
                         {/* Company Details */}
-                        <div style={{ padding: "6px 10px", borderBottom: "1px solid #000", flex: 1 }}>
-                          <p style={{ fontSize: "11px", fontWeight: 900, margin: "0 0 4px 0" }}>Fluoro Automation Seals Pvt Ltd</p>
-                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 600 }}>3/180, Rajiv Gandhi Road, Mettukuppam, Chennai Tamil Nadu 600097 India</p>
-                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 600 }}>Phone: 9841175097 | Email: fas@fluoroautomationseals.com</p>
-                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 700 }}>GSTIN/UIN: 33AAECF2716M1ZO</p>
-                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 700 }}>State Name: Tamil Nadu, Code: 33</p>
+                        <div style={{ padding: "6px 8px", borderBottom: "1px solid #ccc", flex: 1 }}>
+                          <div style={{ fontWeight: 900, fontSize: "11px", marginBottom: "2px" }}>Fluoro Automation Seals Pvt Ltd</div>
+                          <div style={{ fontWeight: 600, lineHeight: 1.4, color: "#222", fontSize: "10px" }}>
+                            3/180, Rajiv Gandhi Road, Mettukuppam,<br />
+                            Chennai Tamil Nadu 600097 India<br />
+                            Phone: 9841175097 | Email: fas@fluoroautomationseals.com<br />
+                            GSTIN/UIN: 33AAECF2716M1ZO<br />
+                            State Name: Tamil Nadu, Code: 33
+                          </div>
                         </div>
-                        {/* Billed To / Buyer */}
-                        <div style={{ padding: "6px 10px", flex: 1.5 }}>
-                          <p style={{ fontSize: "9px", color: "#444", margin: "0 0 2px 0" }}>Buyer (Bill to)</p>
+                        {/* Ship To Details */}
+                        <div style={{ padding: "6px 8px", fontSize: "10px", flex: 1.5 }}>
+                          <div style={{ fontWeight: 700, color: "#555", marginBottom: "2px" }}>Ship to Add.</div>
+                          <div style={{ fontWeight: 900, fontSize: "11px", marginBottom: "2px" }}>{selectedOrder?.customerName || selectedCustomer?.companyName}</div>
+                          <pre style={{ fontFamily: "Arial, sans-serif", fontSize: "10px", whiteSpace: "pre-wrap", margin: "0 0 2px 0", fontWeight: 600, lineHeight: 1.3 }}>
+                            {getFormattedCustomerAddress(selectedCustomer, shippingAddress || billingAddress, 'shipping')}
+                          </pre>
+                          {(selectedOrder?.customerGST || selectedCustomer?.gst) && (
+                            <div style={{ fontWeight: 700 }}>GSTIN/UIN: {selectedOrder?.customerGST || selectedCustomer?.gst}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right Column: Billed To / Buyer */}
+                      <div style={{ padding: "6px 8px", fontSize: "10px", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+                          <p style={{ fontSize: "10px", color: "#555", margin: "0 0 2px 0", fontWeight: 700 }}>Buyer (Bill to)</p>
                           <p style={{ fontSize: "11px", fontWeight: 900, margin: "2px 0" }}>{selectedOrder?.customerName || selectedCustomer?.companyName}</p>
-                          <pre style={{ fontFamily: "Arial, sans-serif", fontSize: "9px", whiteSpace: "pre-wrap", margin: "2px 0", fontWeight: 600, lineHeight: 1.3 }}>{formatAddress(billingAddress)}</pre>
-                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 700 }}>GSTIN/UIN: {selectedOrder?.customerGST || selectedCustomer?.gst}</p>
-                          <p style={{ fontSize: "9px", margin: "2px 0", fontWeight: 700 }}>State Name: {(billingAddress?.state) || (selectedOrder?.customerState) || "Tamil Nadu"}</p>
-                        </div>
+                          <pre style={{ fontFamily: "Arial, sans-serif", fontSize: "10px", whiteSpace: "pre-wrap", margin: "2px 0", fontWeight: 600, lineHeight: 1.3 }}>{getFormattedCustomerAddress(selectedCustomer, billingAddress, 'billing')}</pre>
+                          <p style={{ fontSize: "10px", margin: "2px 0", fontWeight: 700 }}>GSTIN/UIN: {selectedOrder?.customerGST || selectedCustomer?.gst}</p>
+                          <p style={{ fontSize: "10px", margin: "2px 0", fontWeight: 700 }}>State Name: {(billingAddress?.state) || (selectedOrder?.customerState) || "Tamil Nadu"}</p>
                       </div>
 
                       {/* Right Column: Invoice Attributes Grid */}
