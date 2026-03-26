@@ -503,7 +503,15 @@ export default function Shipments() {
                         <TableCell>{s.customerName}</TableCell>
                         <TableCell className="font-mono hidden md:table-cell">{s.vehicleNo || '—'}</TableCell>
                         <TableCell className="hidden lg:table-cell">
-                          {format(new Date(s.dispatchDate), 'dd MMM yyyy')}
+                          {(() => {
+                            try {
+                              if (!s.dispatchDate) return '—';
+                              const d = new Date(s.dispatchDate);
+                              return isNaN(d.getTime()) ? 'Invalid Date' : format(d, 'dd MMM yyyy');
+                            } catch (e) {
+                              return '—';
+                            }
+                          })()}
                         </TableCell>
                         <TableCell>
                           <Badge className={`text-xs md:text-sm px-2 md:px-3 py-1 font-medium ${getStatusBadge(s.deliveryStatus)}`}>
@@ -622,9 +630,9 @@ export default function Shipments() {
                         gap: '12px'
                       }}>
                         <img 
-                          src={fas.src || fas} 
-                          alt="FAS Logo" 
-                          style={{ width: '75px', height: 'auto', flexShrink: 0 }}
+                          src={(fas as any).src || fas} 
+                          alt="Logo" 
+                          style={{ height: '45px', width: 'auto', display: 'block' }} 
                           crossOrigin="anonymous"
                         />
                         <div style={{ textAlign: 'center', flex: 1 }}>
@@ -683,7 +691,17 @@ export default function Shipments() {
                                 </tr>
                                 <tr>
                                   <td style={{ paddingRight: '10px', padding: '2px 0', verticalAlign: 'top', fontWeight: '700' }}>Date:</td>
-                                  <td style={{ padding: '2px 0', fontWeight: '800' }}>{format(new Date(selectedShipment.dispatchDate), 'dd/MM/yyyy')}</td>
+                                  <td style={{ padding: '2px 0', fontWeight: '800' }}>
+                                    {(() => {
+                                      try {
+                                        if (!selectedShipment.dispatchDate) return '—';
+                                        const d = new Date(selectedShipment.dispatchDate);
+                                        return isNaN(d.getTime()) ? 'Invalid Date' : format(d, 'dd/MM/yyyy');
+                                      } catch (e) {
+                                        return '—';
+                                      }
+                                    })()}
+                                  </td>
                                 </tr>
                                 <tr>
                                   <td style={{ paddingRight: '10px', padding: '2px 0', verticalAlign: 'top', fontWeight: '700' }}>Time:</td>

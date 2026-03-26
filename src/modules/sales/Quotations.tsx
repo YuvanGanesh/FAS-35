@@ -113,20 +113,38 @@ export default function Quotations() {
     // Filter by date/month/year
     if (filterType === 'date' && selectedDate) {
       result = result.filter((q) => {
-        const qDate = new Date(q.quoteDate).toISOString().split('T')[0];
-        return qDate === selectedDate;
+        try {
+          if (!q.quoteDate) return false;
+          const qDate = new Date(q.quoteDate).toISOString().split('T')[0];
+          return qDate === selectedDate;
+        } catch (e) {
+          return false;
+        }
       });
     } else if (filterType === 'month' && selectedMonth && selectedYear) {
       result = result.filter((q) => {
-        const qDate = new Date(q.quoteDate);
-        const qYear = qDate.getFullYear().toString();
-        const qMonth = String(qDate.getMonth() + 1).padStart(2, '0');
-        return qYear === selectedYear && qMonth === selectedMonth;
+        try {
+          if (!q.quoteDate) return false;
+          const qDate = new Date(q.quoteDate);
+          if (isNaN(qDate.getTime())) return false;
+          const qYear = qDate.getFullYear().toString();
+          const qMonth = String(qDate.getMonth() + 1).padStart(2, '0');
+          return qYear === selectedYear && qMonth === selectedMonth;
+        } catch (e) {
+          return false;
+        }
       });
     } else if (filterType === 'year' && selectedYear) {
       result = result.filter((q) => {
-        const qYear = new Date(q.quoteDate).getFullYear().toString();
-        return qYear === selectedYear;
+        try {
+          if (!q.quoteDate) return false;
+          const qDate = new Date(q.quoteDate);
+          if (isNaN(qDate.getTime())) return false;
+          const qYear = qDate.getFullYear().toString();
+          return qYear === selectedYear;
+        } catch (e) {
+          return false;
+        }
       });
     }
 
@@ -542,7 +560,15 @@ export default function Quotations() {
                             {q.quoteNumber}
                           </TableCell>
                           <TableCell>
-                            {format(new Date(q.quoteDate), 'dd-MM-yyyy')}
+                            {(() => {
+                              try {
+                                if (!q.quoteDate) return 'N/A';
+                                const d = new Date(q.quoteDate);
+                                return isNaN(d.getTime()) ? 'Invalid Date' : format(d, 'dd-MM-yyyy');
+                              } catch (e) {
+                                return 'Invalid Date';
+                              }
+                            })()}
                           </TableCell>
                           <TableCell>
                             {q.isWalkIn ? (

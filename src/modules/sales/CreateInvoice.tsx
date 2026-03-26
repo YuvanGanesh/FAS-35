@@ -1683,7 +1683,17 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                           </div>
                           <div style={{ flex: 1, padding: "4px 8px" }}>
                             <span style={{ color: "#444", fontSize: "10px" }}>Dated</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{invoiceDate ? format(new Date(invoiceDate), "dd-MMM-yy") : ""}</div>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>
+                              {(() => {
+                                if (!invoiceDate) return "";
+                                try {
+                                  const d = new Date(invoiceDate);
+                                  return isNaN(d.getTime()) ? "" : format(d, "dd-MMM-yy");
+                                } catch (e) {
+                                  return "";
+                                }
+                              })()}
+                            </div>
                           </div>
                         </div>
                         {/* Row 2 */}
@@ -1716,7 +1726,17 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                           </div>
                           <div style={{ flex: 1, padding: "4px 8px" }}>
                             <span style={{ color: "#444", fontSize: "10px" }}>Dated</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{customerPODate ? format(new Date(customerPODate), "dd-MMM-yy") : ""}</div>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>
+                              {(() => {
+                                if (!customerPODate) return "";
+                                try {
+                                  const d = new Date(customerPODate);
+                                  return isNaN(d.getTime()) ? "" : format(d, "dd-MMM-yy");
+                                } catch (e) {
+                                  return "";
+                                }
+                              })()}
+                            </div>
                           </div>
                         </div>
                         {/* Row 5 */}
@@ -1727,7 +1747,17 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                           </div>
                           <div style={{ flex: 1, padding: "4px 8px" }}>
                             <span style={{ color: "#444", fontSize: "10px" }}>Delivery Note Date</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{eWayBillDate ? format(new Date(eWayBillDate), "dd-MMM-yy") : ""}</div>
+                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>
+                              {(() => {
+                                if (!eWayBillDate) return "";
+                                try {
+                                  const d = new Date(eWayBillDate);
+                                  return isNaN(d.getTime()) ? "" : format(d, "dd-MMM-yy");
+                                } catch (e) {
+                                  return "";
+                                }
+                              })()}
+                            </div>
                           </div>
                         </div>
                         {/* Row 6 */}

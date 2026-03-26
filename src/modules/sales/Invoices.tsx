@@ -93,7 +93,17 @@ const FullInvoiceTemplate = ({ invoice }: { invoice: any }) => {
                 <td style={{ ...td(), width: "18%", color: "#555" }}>Invoice No.</td>
                 <td style={{ ...td(), width: "32%", fontWeight: 900, fontSize: "13px" }}>{invoice.invoiceNumber}</td>
                 <td style={{ ...td(), width: "18%", color: "#555" }}>Dated</td>
-                <td style={{ ...td(), width: "32%", fontWeight: 900, fontSize: "13px" }}>{invoice.invoiceDate ? format(new Date(invoice.invoiceDate), "d-MMM-yy") : ""}</td>
+                <td style={{ ...td(), width: "32%", fontWeight: 900, fontSize: "13px" }}>
+                  {(() => {
+                    try {
+                      if (!invoice.invoiceDate) return "";
+                      const d = new Date(invoice.invoiceDate);
+                      return isNaN(d.getTime()) ? "" : format(d, "d-MMM-yy");
+                    } catch (e) {
+                      return "";
+                    }
+                  })()}
+                </td>
               </tr>
               <tr>
                 <td style={{ ...td(), color: "#555" }}>Delivery Note</td>
@@ -105,7 +115,17 @@ const FullInvoiceTemplate = ({ invoice }: { invoice: any }) => {
                 <td style={{ ...td(), color: "#555" }}>Customer PO No.</td>
                 <td style={{ ...td(), fontWeight: 800 }}>{invoice.customerPO || ""}</td>
                 <td style={{ ...td(), color: "#555" }}>Customer PO Date</td>
-                <td style={{ ...td(), fontWeight: 800 }}>{invoice.customerPODate ? format(new Date(invoice.customerPODate), "d-MMM-yy") : ""}</td>
+                <td style={{ ...td(), fontWeight: 800 }}>
+                  {(() => {
+                    try {
+                      if (!invoice.customerPODate) return "";
+                      const d = new Date(invoice.customerPODate);
+                      return isNaN(d.getTime()) ? "" : format(d, "d-MMM-yy");
+                    } catch (e) {
+                      return "";
+                    }
+                  })()}
+                </td>
               </tr>
               <tr>
                 <td style={{ ...td(), color: "#555" }}>Buyer's Order No.</td>
@@ -788,7 +808,17 @@ export default function InvoicesPage() {
                             <TableCell className="font-mono font-semibold">
                               {inv.invoiceNumber}
                             </TableCell>
-                            <TableCell>{format(new Date(inv.invoiceDate), "dd-MM-yyyy")}</TableCell>
+                            <TableCell>
+                              {(() => {
+                                try {
+                                  if (!inv.invoiceDate) return "—";
+                                  const d = new Date(inv.invoiceDate);
+                                  return isNaN(d.getTime()) ? "Invalid Date" : format(d, "dd-MM-yyyy");
+                                } catch (e) {
+                                  return "—";
+                                }
+                              })()}
+                            </TableCell>
                             <TableCell>{inv.customerName}</TableCell>
                             <TableCell className="font-medium">
                               ₹{Number(inv.grandTotal || 0).toFixed(2)}
