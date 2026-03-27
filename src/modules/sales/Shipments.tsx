@@ -654,7 +654,7 @@ export default function Shipments() {
                         padding: '6px 16px',
                         background: '#e5e7eb',
                         borderBottom: '3px solid #000',
-                        fontSize: '9.5px',
+                        fontSize: '12px',
                         fontWeight: '800',
                         gap: '45px'
                       }}>
@@ -683,7 +683,7 @@ export default function Shipments() {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '8.5px', marginBottom: '12px' }}>
                           {/* Left Column */}
                           <div>
-                            <table style={{ width: '100%', fontSize: '8.5px', borderCollapse: 'collapse' }}>
+                            <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
                               <tbody>
                                 <tr>
                                   <td style={{ paddingRight: '10px', fontWeight: '700', padding: '2px 0', verticalAlign: 'top' }}>PL No.:</td>
@@ -725,7 +725,7 @@ export default function Shipments() {
 
                           {/* Right Column */}
                           <div>
-                            <table style={{ width: '100%', fontSize: '8.5px', borderCollapse: 'collapse' }}>
+                            <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
                               <tbody>
                                 <tr>
                                   <td style={{ paddingRight: '10px', fontWeight: '700', padding: '2px 0', verticalAlign: 'top' }}>Invoice No:</td>
@@ -786,12 +786,12 @@ export default function Shipments() {
                               {inv?.lineItems?.map((item: any, i: number) => (
                                 <tr key={i}>
                                   <td style={{ textAlign: 'center', fontWeight: '800' }}>{i + 1}</td>
-                                  <td style={{ fontWeight: '800', fontSize: '8px', wordWrap: 'break-word' }}>{item.partCode}</td>
-                                  <td className="description-cell" style={{ textAlign: 'left', fontWeight: '700', fontSize: '8px', wordWrap: 'break-word', whiteSpace: 'normal' }}>
+                                  <td style={{ fontWeight: '800', fontSize: '12px', wordWrap: 'break-word' }}>{item.partCode}</td>
+                                  <td className="description-cell" style={{ textAlign: 'left', fontWeight: '700', fontSize: '12px', wordWrap: 'break-word', whiteSpace: 'normal' }}>
                                     {item.description}
                                   </td>
-                                  <td style={{ fontWeight: '700', textAlign: 'center', fontSize: '8px' }}>{item.hsnCode}</td>
-                                  <td style={{ textAlign: 'center', fontWeight: '900', fontSize: '10px', color: '#059669' }}>{item.qty}</td>
+                                  <td style={{ fontWeight: '700', textAlign: 'center', fontSize: '12px' }}>{item.hsnCode}</td>
+                                  <td style={{ textAlign: 'center', fontWeight: '900', fontSize: '12px', color: '#059669' }}>{item.qty}</td>
                                   <td style={{ textAlign: 'center', fontWeight: '700' }}>{item.uom}</td>
                                 </tr>
                               ))}
@@ -808,8 +808,8 @@ export default function Shipments() {
                             padding: '8px 12px', 
                             marginBottom: '12px' 
                           }}>
-                            <p style={{ fontWeight: '900', fontSize: '9px', marginBottom: '4px' }}>Remarks:</p>
-                            <p style={{ fontSize: '8.5px', lineHeight: 1.4, fontWeight: '700', whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
+                            <p style={{ fontWeight: '900', fontSize: '12px', marginBottom: '4px' }}>Remarks:</p>
+                            <p style={{ fontSize: '12px', lineHeight: 1.4, fontWeight: '700', whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
                               {selectedShipment.remarks}
                             </p>
                           </div>
@@ -818,15 +818,15 @@ export default function Shipments() {
                         {/* Signature Section */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginTop: '20px', borderTop: '2px solid #000', paddingTop: '12px' }}>
                           <div>
-                            <p style={{ fontWeight: '900', fontSize: '9px', marginBottom: '30px' }}>Receiver's Signature</p>
+                            <p style={{ fontWeight: '900', fontSize: '12px', marginBottom: '30px' }}>Receiver's Signature</p>
                             <div style={{ borderTop: '2px solid #000', width: '150px', paddingTop: '5px' }}>
-                              <p style={{ fontSize: '8px', fontWeight: '700' }}>Name & Stamp</p>
+                              <p style={{ fontSize: '12px', fontWeight: '700' }}>Name & Stamp</p>
                             </div>
                           </div>
                           <div style={{ textAlign: 'right' }}>
-                            <p style={{ fontWeight: '900', fontSize: '9px', marginBottom: '30px' }}>For Fluoro Automation Seals Pvt Ltd</p>
+                            <p style={{ fontWeight: '900', fontSize: '12px', marginBottom: '30px' }}>For Fluoro Automation Seals Pvt Ltd</p>
                             <div style={{ borderTop: '2px solid #000', width: '150px', marginLeft: 'auto', paddingTop: '5px' }}>
-                              <p style={{ fontSize: '8px', fontWeight: '700' }}>Authorized Signatory</p>
+                              <p style={{ fontSize: '12px', fontWeight: '700' }}>Authorized Signatory</p>
                             </div>
                           </div>
                         </div>

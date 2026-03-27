@@ -521,8 +521,36 @@ export default function QuotationPrintTemplate({ quotation }: QuotationPrintProp
               <div className="remarks-area">
                 <strong>Remarks:</strong> {q.remarks || 'None'}<br/>
                 <strong>Comments:</strong> {q.comments || 'Thank you!'}<br/><br/>
-                <div style={{ fontStyle: 'italic' }}>
+                <div style={{ fontStyle: 'italic', marginBottom: '10pt' }}>
                   <strong>Amount in Words:</strong> {numberToWords(q.grandTotal)}
+                </div>
+
+                <div style={{ marginTop: '10pt', fontSize: '10pt' }}>
+                  <p style={{ margin: "0 0 4px 0", textDecoration: "none", fontWeight: "bold" }}>Company's Bank Details</p>
+                  <table style={{ borderCollapse: "collapse", fontSize: "10pt" }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ padding: "0 8px 0 0", width: "110px" }}>Bank Name</td>
+                        <td style={{ padding: "0 4px" }}>:</td>
+                        <td style={{ fontWeight: "normal" }}>Canara Bank</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: "0 8px 0 0" }}>A/c No.</td>
+                        <td style={{ padding: "0 4px" }}>:</td>
+                        <td style={{ fontWeight: "normal" }}>9921201001078</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: "0 8px 0 0" }}>IFSC Code</td>
+                        <td style={{ padding: "0 4px" }}>:</td>
+                        <td style={{ fontWeight: "normal" }}>CNRB0002617</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: "0 8px 0 0" }}>Bank Branch</td>
+                        <td style={{ padding: "0 4px" }}>:</td>
+                        <td style={{ fontWeight: "normal" }}>Perungudi, Chennai 600096.</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 

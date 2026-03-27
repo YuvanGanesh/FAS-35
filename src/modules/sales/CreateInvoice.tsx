@@ -59,7 +59,13 @@ interface LineItem {
 
 export default function CreateInvoice() {
   const { id } = useParams<{ id?: string }>()
-  const navigate = useNavigate()
+  const bankDetails = {
+    bankName: "Canara Bank",
+    accountNo: "9921201001078",
+    ifscCode: "CNRB0002617",
+    branch: "Perungudi, Chennai 600096."
+  };
+  const navigate = useNavigate();
   const printRef = useRef<HTMLDivElement>(null)
 
   const urlParams = new URLSearchParams(window.location.search)
@@ -82,18 +88,19 @@ export default function CreateInvoice() {
   const [eWayBillNo, setEWayBillNo] = useState("")
   const [eWayBillDate, setEWayBillDate] = useState("")
   const [remarks, setRemarks] = useState("")
+  const [terms, setTerms] = useState("Certified that the Particulars given above are true and correct")
 
   // ✅ FIXED: Tax States - Initialize with DEFAULT values
   const [applyCGST, setApplyCGST] = useState(true)
   const [applySGST, setApplySGST] = useState(true)
   const [applyIGST, setApplyIGST] = useState(false)
-const [cgstPercent, setCgstPercent] = useState<number | ''>('');
-const [sgstPercent, setSgstPercent] = useState<number | ''>('');
-const [igstPercent, setIgstPercent] = useState<number | ''>('');
+  const [cgstPercent, setCgstPercent] = useState<number | ''>('');
+  const [sgstPercent, setSgstPercent] = useState<number | ''>('');
+  const [igstPercent, setIgstPercent] = useState<number | ''>('');
 
   // ✅ FIXED: Transport Charge States - Initialize with DEFAULT values
-const [transportCharge, setTransportCharge] = useState<number | ''>('');
-const [transportChargePercent, setTransportChargePercent] = useState<number | ''>('');
+  const [transportCharge, setTransportCharge] = useState<number | ''>('');
+  const [transportChargePercent, setTransportChargePercent] = useState<number | ''>('');
   const [transportChargeType, setTransportChargeType] = useState<"fixed" | "percent">("fixed")
 
   const [loadingInvoice, setLoadingInvoice] = useState(false)
@@ -152,17 +159,17 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
         // Process Products correctly from sales/products table
         const flatItems: any[] = []
         const prodMap: Record<string, any> = {}
-        ;(prodData as any[]).forEach((productDoc: any) => {
-          if (productDoc.items && Array.isArray(productDoc.items)) {
-            productDoc.items.forEach((item: any) => {
-              const productCode = item.productCode
-              if (productCode) {
-                prodMap[productCode] = item
-                flatItems.push(item)
-              }
-            })
-          }
-        })
+          ; (prodData as any[]).forEach((productDoc: any) => {
+            if (productDoc.items && Array.isArray(productDoc.items)) {
+              productDoc.items.forEach((item: any) => {
+                const productCode = item.productCode
+                if (productCode) {
+                  prodMap[productCode] = item
+                  flatItems.push(item)
+                }
+              })
+            }
+          })
         setProducts(prodMap)
         setAllProductItems(flatItems)
 
@@ -170,7 +177,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
           if (q.quoteNumber) acc[q.quoteNumber] = q
           return acc
         }, {})
-        ;(window as any).quotMap = quotMap
+          ; (window as any).quotMap = quotMap
 
         // Include any order that has inventory items with okQty > 0 (ready to bill)
         const eligible = (oaData as any[]).filter((order: any) => {
@@ -233,6 +240,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
         setEWayBillNo(inv.eWayBillNo || "")
         setEWayBillDate(inv.eWayBillDate || "")
         setRemarks(inv.remarks || "")
+        setTerms(inv.terms || "Certified that the Particulars given above are true and correct")
         setApplyCGST(inv.applyCGST ?? true)
         setApplySGST(inv.applySGST ?? true)
         setApplyIGST(inv.applyIGST ?? false)
@@ -311,7 +319,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
   useEffect(() => {
     if (!autoOrderId || isEditMode || selectedOrder || allOrders.length === 0) return
     handleOrderChange(autoOrderId)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOrderId, allOrders, inventoryItems])
 
   const customerState =
@@ -481,7 +489,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
   // Add Raw Material Item (from products table stockQty)
   const addRawMaterialItem = (productCode: string) => {
     const prod = products[productCode]
-    
+
     if (!prod) {
       toast.error("Product not found")
       return
@@ -581,14 +589,14 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
       let transportIGST = 0
 
       if (finalTransportCharge > 0) {
-        if (applyCGST && cgstPercent > 0) {
-          transportCGST = (finalTransportCharge * cgstPercent) / 100
+        if (applyCGST && Number(cgstPercent) > 0) {
+          transportCGST = (finalTransportCharge * Number(cgstPercent)) / 100
         }
-        if (applySGST && sgstPercent > 0) {
-          transportSGST = (finalTransportCharge * sgstPercent) / 100
+        if (applySGST && Number(sgstPercent) > 0) {
+          transportSGST = (finalTransportCharge * Number(sgstPercent)) / 100
         }
-        if (applyIGST && igstPercent > 0) {
-          transportIGST = (finalTransportCharge * igstPercent) / 100
+        if (applyIGST && Number(igstPercent) > 0) {
+          transportIGST = (finalTransportCharge * Number(igstPercent)) / 100
         }
       }
 
@@ -710,7 +718,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
   // Deduct from Raw Material Stock (products table)
   const deductFromRawMaterialStock = async (item: LineItem) => {
     if (item.invoicedQty === 0) return
-    
+
     const prod = products[item.partCode]
     if (!prod) return
 
@@ -720,7 +728,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
     // Find the product document ID from allProductItems
     let productDocId = ""
     let itemIndex = -1
-    
+
     const allProductDocs = await getAllRecords("sales/products")
     for (const doc of allProductDocs as any[]) {
       if (doc.items && Array.isArray(doc.items)) {
@@ -741,7 +749,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
         ...updatedItems[itemIndex],
         stockQty: newStock
       }
-      
+
       await updateRecord("sales/products", productDocId, { items: updatedItems })
     }
   }
@@ -788,6 +796,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
       eWayBillNo,
       eWayBillDate,
       remarks,
+      terms,
       applyCGST,
       applySGST,
       applyIGST,
@@ -889,7 +898,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
       })
 
       const img = canvas.toDataURL("image/png")
-      const pdf = new jsPDF("l", "mm", "a4")
+      const pdf = new jsPDF("p", "mm", "a4")
       const pdfWidth = pdf.internal.pageSize.getWidth()
       const pdfHeight = pdf.internal.pageSize.getHeight()
       const imgWidth = canvas.width
@@ -928,37 +937,14 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
   const totalPages = pages.length
 
   const CompanyHeader = (
-    <div
-      style={{
-        textAlign: "center",
-        padding: "12px 16px",
-        borderBottom: "3px solid #000",
-        background: "#ffffff",
-      }}
-    >
-      <img
-        src={fas}
-        alt="FAS"
-        style={{ width: "70px", height: "auto", margin: "0 auto 6px", display: "block" }}
-        crossOrigin="anonymous"
-      />
-      <h1
-        style={{
-          fontSize: "18px",
-          fontWeight: 900,
-          margin: "3px 0",
-          color: "#000",
-          letterSpacing: "0.5px",
-        }}
-      >
-        Fluoro Automation Seals Pvt Ltd
-      </h1>
-      <p style={{ fontSize: "10px", margin: "2px 0", color: "#000", fontWeight: 600 }}>
-        3/180, Rajiv Gandhi Road, Mettukuppam, Chennai Tamil Nadu 600097 India
-      </p>
-      <p style={{ fontSize: "10px", margin: "2px 0", color: "#000", fontWeight: 600 }}>
-        Phone: 9841175097 | Email: fas@fluoroautomationseals.com
-      </p>
+    <div style={{ display: "flex", alignItems: "center", borderBottom: "2px solid #000", padding: "10px", background: "#fff" }}>
+      <img src={fas} width="90" alt="Logo" style={{ marginLeft: "5px" }} />
+      <div style={{ width: "80%", textAlign: "center" as const }}>
+        <h1 style={{ margin: 0, fontSize: "22px", fontWeight: "bold" }}>Fluoro Automation Seals Pvt Ltd</h1>
+        <p style={{ margin: "2px 0", fontSize: "12px" }}>3/180, Rajiv Gandhi Road, Mettukuppam,</p>
+        <p style={{ margin: "2px 0", fontSize: "12px" }}>Chennai, Tamil Nadu - 600097</p>
+        <p style={{ margin: "2px 0", fontSize: "12px" }}>Phone: +91-9841175097 | Email: fas@fluoroautomationseals.com</p>
+      </div>
     </div>
   )
 
@@ -1344,6 +1330,16 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                   onChange={(e) => setEWayBillDate(e.target.value)}
                 />
               </div>
+
+              <div className="md:col-span-3">
+                <Label>Terms & Conditions</Label>
+                <Textarea
+                  value={terms}
+                  onChange={(e) => setTerms(e.target.value)}
+                  placeholder="Enter terms and conditions..."
+                  rows={2}
+                />
+              </div>
             </div>
 
             <div>
@@ -1386,7 +1382,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                 <Input
                   type="number"
                   value={transportCharge}
-              onChange={(e) => setTransportCharge(e.target.value === '' ? '' : Number(e.target.value))}
+                  onChange={(e) => setTransportCharge(e.target.value === '' ? '' : Number(e.target.value))}
                   placeholder="Enter fixed amount"
                 />
               </div>
@@ -1396,7 +1392,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                 <Input
                   type="number"
                   value={transportChargePercent}
-                  onChange={(e) => setTransportChargePercent(e.target.value)}
+                  onChange={(e) => setTransportChargePercent(e.target.value === '' ? '' : Number(e.target.value))}
                   min={0}
                   max={100}
                   step={0.1}
@@ -1437,7 +1433,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                   <Input
                     type="number"
                     value={cgstPercent}
-               onChange={(e) => setCgstPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) => setCgstPercent(e.target.value === '' ? '' : Number(e.target.value))}
                     min={0}
                     step={0.1}
                     disabled={!applyCGST}
@@ -1464,7 +1460,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                   <Input
                     type="number"
                     value={sgstPercent}
-            onChange={(e) => setSgstPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) => setSgstPercent(e.target.value === '' ? '' : Number(e.target.value))}
                     min={0}
                     step={0.1}
                     disabled={!applySGST}
@@ -1491,7 +1487,7 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                   <Input
                     type="number"
                     value={igstPercent}
-             onChange={(e) => setIgstPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) => setIgstPercent(e.target.value === '' ? '' : Number(e.target.value))}
                     min={0}
                     step={0.1}
                     disabled={!applyIGST}
@@ -1568,40 +1564,29 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
         </Card>
 
         {/* MULTI-PAGE PDF PREVIEW */}
-        <div
-          ref={printRef}
-          style={{
-            media: "print",
-            "@page": { size: "A4 landscape", margin: 0 },
-            "@media print": {
-              "print-color-adjust": "exact",
-              "-webkit-print-color-adjust": "exact",
-              margin: 0,
-              padding: 0,
-            },
-            ".page-break": {
-              "page-break-after": "always",
-              "break-after": "page",
-              margin: 0,
-              padding: 0,
-              boxSizing: "border-box",
-            },
-          }}
-        >
+        <style>
+          {`
+            @page { size: A4 portrait; margin: 8mm; }
+            @media print {
+              .page-break { page-break-after: always; break-after: page; }
+            }
+          `}
+        </style>
+        <div ref={printRef}>
           {pages.map((pageItems, pageIndex) => (
             <div
               key={pageIndex}
               className={pageIndex < totalPages - 1 ? "page-break" : ""}
               style={{
-                width: "297mm",
-                height: "210mm",
+                width: "210mm",
+                minHeight: "297mm",
                 background: "#ffffff",
-                margin: "0 auto 20px",
-                padding: 0,
+                margin: "0 auto 40px",
+                padding: "10mm",
+                boxSizing: "border-box",
                 boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
                 fontFamily: "Arial, sans-serif",
                 position: "relative",
-                boxSizing: "border-box",
                 overflow: "hidden",
               }}
             >
@@ -1628,158 +1613,49 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                 >
                   {/* INVOICE DETAILS & CUSTOMER DETAILS - Only on first page */}
                   {pageIndex === 0 && (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "46% 54%",
-                        borderBottom: "2px solid #000",
-                        background: "#ffffff",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {/* Left Column: Company Details & Billed To */}
-                      {/* Left Column: Company Details & Ship To */}
-                      <div style={{ borderRight: "1px solid #000", display: "flex", flexDirection: "column" }}>
-                        {/* Company Details */}
-                        <div style={{ padding: "6px 8px", borderBottom: "1px solid #ccc", flex: 1 }}>
-                          <div style={{ fontWeight: 900, fontSize: "11px", marginBottom: "2px" }}>Fluoro Automation Seals Pvt Ltd</div>
-                          <div style={{ fontWeight: 600, lineHeight: 1.4, color: "#222", fontSize: "10px" }}>
-                            3/180, Rajiv Gandhi Road, Mettukuppam,<br />
-                            Chennai Tamil Nadu 600097 India<br />
-                            Phone: 9841175097 | Email: fas@fluoroautomationseals.com<br />
-                            GSTIN/UIN: 33AAECF2716M1ZO<br />
-                            State Name: Tamil Nadu, Code: 33
-                          </div>
+                    <>
+                      {/* GST ROW */}
+                      <div style={{ display: "flex", justifyContent: "space-around", borderBottom: "2px solid #000", padding: "5px", fontWeight: "bold", fontSize: "11px" }}>
+                        <div>GSTIN: 33AAECF2716M1ZO</div>
+                        <div>PAN: AAECF2716M</div>
+                        <div>CIN: U25209TN2020PTC138498</div>
+                      </div>
+
+                      {/* ROW 1: Shipping + Invoice Details 1 */}
+                      <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
+                        <div style={{ width: "50%", padding: "8px", borderRight: "1px solid #000" }}>
+                          <strong style={{ fontSize: "12px" }}>Ship To:</strong>
+                          <p style={{ margin: "3px 0", fontWeight: "bold", fontSize: "12px" }}>{selectedOrder?.customerName || selectedCustomer?.companyName}</p>
+                          <p style={{ margin: "3px 0", whiteSpace: "pre-wrap", fontSize: "11px" }}>{getFormattedCustomerAddress(selectedCustomer, shippingAddress || billingAddress, 'shipping')}</p>
                         </div>
-                        {/* Ship To Details */}
-                        <div style={{ padding: "6px 8px", fontSize: "10px", flex: 1.5 }}>
-                          <div style={{ fontWeight: 700, color: "#555", marginBottom: "2px" }}>Ship to Add.</div>
-                          <div style={{ fontWeight: 900, fontSize: "11px", marginBottom: "2px" }}>{selectedOrder?.customerName || selectedCustomer?.companyName}</div>
-                          <pre style={{ fontFamily: "Arial, sans-serif", fontSize: "10px", whiteSpace: "pre-wrap", margin: "0 0 2px 0", fontWeight: 600, lineHeight: 1.3 }}>
-                            {getFormattedCustomerAddress(selectedCustomer, shippingAddress || billingAddress, 'shipping')}
-                          </pre>
-                          {(selectedOrder?.customerGST || selectedCustomer?.gst) && (
-                            <div style={{ fontWeight: 700 }}>GSTIN/UIN: {selectedOrder?.customerGST || selectedCustomer?.gst}</div>
-                          )}
+                        <div style={{ width: "50%", padding: "8px", fontSize: "11px" }}>
+                          <p style={{ margin: "3px 0" }}><strong>Invoice No:</strong> {invoiceNumber}</p>
+                          <p style={{ margin: "3px 0" }}>
+                            <strong>Invoice Date:</strong> {invoiceDate ? format(new Date(invoiceDate), "dd-MM-yyyy") : ""}
+                          </p>
+                          <p style={{ margin: "3px 0" }}><strong>Payment Terms:</strong> {paymentTerms}</p>
+                          <p style={{ margin: "3px 0" }}><strong>Transporter Name:</strong> {transporterName}</p>
+                          <p style={{ margin: "3px 0" }}><strong>E-Way Bill No. :</strong> {eWayBillNo}</p>
+                          <p style={{ margin: "3px 0" }}><strong>E-Way Bill Date :</strong> {eWayBillDate}</p>
                         </div>
                       </div>
 
-                      {/* Right Column: Billed To / Buyer */}
-                      <div style={{ padding: "6px 8px", fontSize: "10px", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-                          <p style={{ fontSize: "10px", color: "#555", margin: "0 0 2px 0", fontWeight: 700 }}>Buyer (Bill to)</p>
-                          <p style={{ fontSize: "11px", fontWeight: 900, margin: "2px 0" }}>{selectedOrder?.customerName || selectedCustomer?.companyName}</p>
-                          <pre style={{ fontFamily: "Arial, sans-serif", fontSize: "10px", whiteSpace: "pre-wrap", margin: "2px 0", fontWeight: 600, lineHeight: 1.3 }}>{getFormattedCustomerAddress(selectedCustomer, billingAddress, 'billing')}</pre>
-                          <p style={{ fontSize: "10px", margin: "2px 0", fontWeight: 700 }}>GSTIN/UIN: {selectedOrder?.customerGST || selectedCustomer?.gst}</p>
-                          <p style={{ fontSize: "10px", margin: "2px 0", fontWeight: 700 }}>State Name: {(billingAddress?.state) || (selectedOrder?.customerState) || "Tamil Nadu"}</p>
-                      </div>
-
-                      {/* Right Column: Invoice Attributes Grid */}
-                      <div style={{ display: "flex", flexDirection: "column", fontSize: "11px" }}>
-                        {/* Row 1 */}
-                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
-                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Invoice No.</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{invoiceNumber}</div>
-                          </div>
-                          <div style={{ flex: 1, padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Dated</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>
-                              {(() => {
-                                if (!invoiceDate) return "";
-                                try {
-                                  const d = new Date(invoiceDate);
-                                  return isNaN(d.getTime()) ? "" : format(d, "dd-MMM-yy");
-                                } catch (e) {
-                                  return "";
-                                }
-                              })()}
-                            </div>
-                          </div>
+                      {/* ROW 2: Billing + Invoice Details 2 */}
+                      <div style={{ display: "flex", borderBottom: "2px solid #000" }}>
+                        <div style={{ width: "50%", padding: "8px", borderRight: "1px solid #000" }}>
+                          <strong style={{ fontSize: "12px" }}>Bill To:</strong>
+                          <p style={{ margin: "3px 0", fontWeight: "bold", fontSize: "12px" }}>{selectedOrder?.customerName || selectedCustomer?.companyName}</p>
+                          <p style={{ margin: "3px 0", whiteSpace: "pre-wrap", fontSize: "11px" }}>{getFormattedCustomerAddress(selectedCustomer, billingAddress, 'billing')}</p>
                         </div>
-                        {/* Row 2 */}
-                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
-                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Delivery Note</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{""}</div>
-                          </div>
-                          <div style={{ flex: 1, padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Mode/Terms of Payment</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{paymentTerms}</div>
-                          </div>
-                        </div>
-                        {/* Row 3 */}
-                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
-                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Reference No. & Date.</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{""}</div>
-                          </div>
-                          <div style={{ flex: 1, padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Other References</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{""}</div>
-                          </div>
-                        </div>
-                        {/* Row 4 */}
-                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
-                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Buyer's Order No.</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{customerPONo}</div>
-                          </div>
-                          <div style={{ flex: 1, padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Dated</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>
-                              {(() => {
-                                if (!customerPODate) return "";
-                                try {
-                                  const d = new Date(customerPODate);
-                                  return isNaN(d.getTime()) ? "" : format(d, "dd-MMM-yy");
-                                } catch (e) {
-                                  return "";
-                                }
-                              })()}
-                            </div>
-                          </div>
-                        </div>
-                        {/* Row 5 */}
-                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
-                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Dispatch Doc No.</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{eWayBillNo}</div>
-                          </div>
-                          <div style={{ flex: 1, padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Delivery Note Date</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>
-                              {(() => {
-                                if (!eWayBillDate) return "";
-                                try {
-                                  const d = new Date(eWayBillDate);
-                                  return isNaN(d.getTime()) ? "" : format(d, "dd-MMM-yy");
-                                } catch (e) {
-                                  return "";
-                                }
-                              })()}
-                            </div>
-                          </div>
-                        </div>
-                        {/* Row 6 */}
-                        <div style={{ display: "flex", borderBottom: "1px solid #000" }}>
-                          <div style={{ flex: 1, borderRight: "1px solid #000", padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Dispatched through</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{transportMode}</div>
-                          </div>
-                          <div style={{ flex: 1, padding: "4px 8px" }}>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Destination</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{placeOfSupply}</div>
-                          </div>
-                        </div>
-                        {/* Row 7 */}
-                        <div style={{ display: "flex", padding: "4px 8px", flex: 1 }}>
-                          <div>
-                            <span style={{ color: "#444", fontSize: "10px" }}>Terms of Delivery</span>
-                            <div style={{ fontWeight: 800, marginTop: "2px", fontSize: "12px" }}>{""}</div>
-                          </div>
+                        <div style={{ width: "50%", padding: "8px", fontSize: "11px" }}>
+                          <p style={{ margin: "3px 0" }}><strong>Transport Mode :</strong> {transportMode}</p>
+                          <p style={{ margin: "3px 0" }}><strong>Vehicle No. :</strong> {vehicleNo}</p>
+                          <p style={{ margin: "3px 0" }}><strong>Place of Supply:</strong> {placeOfSupply}</p>
+                          <p style={{ margin: "3px 0" }}><strong>Customer PO No. :</strong> {customerPONo}</p>
+                          <p style={{ margin: "3px 0" }}><strong>Customer PO Date :</strong> {customerPODate}</p>
                         </div>
                       </div>
-                    </div>
+                    </>
                   )}
 
                   {/* Continuation header for pages after first */}
@@ -1808,68 +1684,70 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                         background: "#ffffff",
                       }}
                     >
-                      <thead style={{ background: "#ffffff" }}>
-                        <tr>
-                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "4%", fontWeight: 900 }}>
-                            Sl No
-                          </th>
-                          <th style={{ border: "1px solid #000", padding: "4px 2px", width: "42%", fontWeight: 900 }}>
-                            Description of Goods and Services
-                          </th>
-                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "10%", fontWeight: 900 }}>
-                            HSN/SAC
-                          </th>
-                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "9%", fontWeight: 900 }}>
-                            Quantity
-                          </th>
-                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "right", width: "10%", fontWeight: 900 }}>
-                            Rate
-                          </th>
-                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "center", width: "7%", fontWeight: 900 }}>
-                            per
-                          </th>
-                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "right", width: "6%", fontWeight: 900 }}>
-                            Disc. ₹
-                          </th>
-                          <th style={{ border: "1px solid #000", padding: "4px 2px", textAlign: "right", width: "14%", fontWeight: 900 }}>
-                            Amount
-                          </th>
+                      <thead style={{ background: "#f2f2f2" }}>
+                        <tr style={{ fontSize: "12px" }}>
+                          <th rowSpan={2} style={{ border: "1px solid #000", padding: "2px", width: "3%" }}>S.No</th>
+                          <th rowSpan={2} style={{ border: "1px solid #000", padding: "2px", width: "25%" }}>Part Code / Description</th>
+                          <th rowSpan={2} style={{ border: "1px solid #000", padding: "2px", width: "8%" }}>HSN/SAC</th>
+                          <th rowSpan={2} style={{ border: "1px solid #000", padding: "2px", width: "5%" }}>Qty</th>
+                          <th rowSpan={2} style={{ border: "1px solid #000", padding: "2px", width: "4%" }}>UOM</th>
+                          <th rowSpan={2} style={{ border: "1px solid #000", padding: "2px", width: "8%", textAlign: "right" }}>Rate</th>
+                          <th rowSpan={2} style={{ border: "1px solid #000", padding: "2px", width: "9%", textAlign: "right" }}>Amount</th>
+                          <th rowSpan={2} style={{ border: "1px solid #000", padding: "2px", width: "4%", textAlign: "right" }}>Disc</th>
+                          <th rowSpan={2} style={{ border: "1px solid #000", padding: "2px", width: "9%", textAlign: "right" }}>Taxable Value</th>
+                          <th colSpan={2} style={{ border: "1px solid #000", padding: "2px", textAlign: "center" }}>CGST</th>
+                          <th colSpan={2} style={{ border: "1px solid #000", padding: "2px", textAlign: "center" }}>SGST/UTGST</th>
+                          <th colSpan={2} style={{ border: "1px solid #000", padding: "2px", textAlign: "center" }}>IGST</th>
+                        </tr>
+                        <tr style={{ fontSize: "12px" }}>
+                          <th style={{ border: "1px solid #000", padding: "2px", textAlign: "center", width: "3%" }}>%</th>
+                          <th style={{ border: "1px solid #000", padding: "2px", textAlign: "right", width: "6%" }}>Amt</th>
+                          <th style={{ border: "1px solid #000", padding: "2px", textAlign: "center", width: "3%" }}>%</th>
+                          <th style={{ border: "1px solid #000", padding: "2px", textAlign: "right", width: "6%" }}>Amt</th>
+                          <th style={{ border: "1px solid #000", padding: "2px", textAlign: "center", width: "3%" }}>%</th>
+                          <th style={{ border: "1px solid #000", padding: "2px", textAlign: "right", width: "6%" }}>Amt</th>
                         </tr>
                       </thead>
                       <tbody>
                         {pageItems.map((item, i) => {
                           const globalIndex = pageIndex * ITEMS_PER_PAGE + i
+                          const itemAmount = item.invoicedQty * item.rate
                           return (
-                            <tr key={i} style={{ background: "#ffffff" }}>
-                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 700 }}>
-                                {globalIndex + 1}
+                            <tr key={i} style={{ fontSize: "12px" }}>
+                              <td style={{ border: "1px solid #000", padding: "4px", textAlign: "center" }}>{globalIndex + 1}</td>
+                              <td style={{ border: "1px solid #000", padding: "4px" }}>
+                                <div style={{ fontWeight: "bold" }}>{item.partCode}</div>
+                                <div style={{ fontSize: "12px" }}>{item.description}</div>
                               </td>
-                              <td style={{ border: "1px solid #000", padding: "3px 4px", fontSize: "8.5px", lineHeight: 1.3 }}>
-                                <div style={{ fontWeight: 800 }}>{item.partCode}</div>
-                                <div style={{ fontSize: "8px", color: "#222", fontWeight: 600 }}>{item.description}</div>
-                              </td>
-                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 700 }}>
-                                {item.hsnCode}
-                              </td>
-                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 800 }}>
-                                <span style={{ marginRight: '4px' }}>{item.invoicedQty}</span>
-                                <span style={{ fontSize: '7px' }}>{item.uom}</span>
-                              </td>
-                              <td style={{ border: "1px solid #000", padding: "3px 4px", textAlign: "right", fontWeight: 700 }}>
-                                {formatAmount(item.rate)}
-                              </td>
-                              <td style={{ border: "1px solid #000", padding: "3px 2px", textAlign: "center", fontWeight: 700 }}>
-                                {item.uom}
-                              </td>
-                              <td style={{ border: "1px solid #000", padding: "3px 4px", textAlign: "right", fontWeight: 700 }}>
-                                {formatAmount(item.discount)}
-                              </td>
-                              <td style={{ border: "1px solid #000", padding: "3px 4px", textAlign: "right", fontWeight: 900, background: "#ffffff" }}>
-                                {formatAmount(item.taxableValue)}
-                              </td>
+                              <td style={{ border: "1px solid #000", padding: "4px", textAlign: "center" }}>{item.hsnCode}</td>
+                              <td style={{ border: "1px solid #000", padding: "4px", textAlign: "center", fontWeight: "bold" }}>{item.invoicedQty}</td>
+                              <td style={{ border: "1px solid #000", padding: "4px", textAlign: "center" }}>{item.uom}</td>
+                              <td style={{ border: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(item.rate)}</td>
+                              <td style={{ border: "1px solid #000", padding: "4px", textAlign: "right", fontWeight: "bold" }}>{formatAmount(itemAmount)}</td>
+                              <td style={{ border: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(item.discount || 0)}</td>
+                              <td style={{ border: "1px solid #000", padding: "4px", textAlign: "right", fontWeight: "bold" }}>{formatAmount(item.taxableValue)}</td>
+                              <td style={{ border: "1px solid #000", padding: "2px", textAlign: "center" }}>{applyCGST ? `${Number(item.cgstPercent || cgstPercent || 0).toFixed(1)}` : "0.0"}</td>
+                              <td style={{ border: "1px solid #000", padding: "2px", textAlign: "right" }}>{formatAmount(applyCGST ? item.cgstAmount : 0)}</td>
+                              <td style={{ border: "1px solid #000", padding: "2px", textAlign: "center" }}>{applySGST ? `${Number(item.sgstPercent || sgstPercent || 0).toFixed(1)}` : "0.0"}</td>
+                              <td style={{ border: "1px solid #000", padding: "2px", textAlign: "right" }}>{formatAmount(applySGST ? item.sgstAmount : 0)}</td>
+                              <td style={{ border: "1px solid #000", padding: "2px", textAlign: "center" }}>{applyIGST ? `${Number(item.igstPercent || igstPercent || 0).toFixed(1)}` : "0.0"}</td>
+                              <td style={{ border: "1px solid #000", padding: "2px", textAlign: "right" }}>{formatAmount(applyIGST ? item.igstAmount : 0)}</td>
                             </tr>
                           )
                         })}
+                        {/* TOTAL ROW inside table */}
+                        <tr style={{ backgroundColor: "#f2f2f2", fontWeight: "bold", fontSize: "12px" }}>
+                          <td colSpan={6} style={{ border: "1px solid #000", padding: "4px", textAlign: "right" }}>TOTAL</td>
+                          <td style={{ border: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(pageItems.reduce((s, i) => s + (i.invoicedQty * i.rate), 0))}</td>
+                          <td style={{ border: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(pageItems.reduce((s, i) => s + (i.discount || 0), 0))}</td>
+                          <td style={{ border: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(pageItems.reduce((s, i) => s + (i.taxableValue || 0), 0))}</td>
+                          <td style={{ border: "1px solid #000", padding: "4px" }}></td>
+                          <td style={{ border: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(pageItems.reduce((s, i) => s + (applyCGST ? i.cgstAmount : 0), 0))}</td>
+                          <td style={{ border: "1px solid #000", padding: "4px" }}></td>
+                          <td style={{ border: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(pageItems.reduce((s, i) => s + (applySGST ? i.sgstAmount : 0), 0))}</td>
+                          <td style={{ border: "1px solid #000", padding: "4px" }}></td>
+                          <td style={{ border: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(pageItems.reduce((s, i) => s + (applyIGST ? i.igstAmount : 0), 0))}</td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
@@ -1877,125 +1755,69 @@ const [transportChargePercent, setTransportChargePercent] = useState<number | ''
                   {/* Bottom Section - Only on last page */}
                   {pageIndex === totalPages - 1 && (
                     <>
-                      {/* TOTAL ROW */}
-                      <div style={{ flexShrink: 0, background: "#ffffff" }}>
-                        <table
-                          style={{
-                            width: "100%",
-                            borderCollapse: "collapse",
-                            fontSize: "8px",
-                            background: "#ffffff",
-                          }}
-                        >
+                      {/* TOTAL SECTION */}
+                      <div style={{ display: "flex", border: "1px solid #000", borderTop: "none", background: "#fff", minHeight: "100px" }}>
+                        <div style={{ width: "50%", borderRight: "1px solid #000", padding: "8px", fontSize: "11px" }}>
+                          <p style={{ margin: "2px 0" }}>Items Total: <strong>{symbol}{formatAmount(lineItems.reduce((s, i) => s + (i.invoicedQty * i.rate), 0))}</strong></p>
+                          <p style={{ margin: "2px 0" }}>Taxable Amount: <strong>{symbol}{formatAmount(taxable)}</strong></p>
+                          {applyCGST && cgst > 0 && <p style={{ margin: "2px 0", color: "#0066cc" }}>CGST: <strong>{symbol}{formatAmount(cgst)}</strong></p>}
+                          {applySGST && sgst > 0 && <p style={{ margin: "2px 0", color: "#0066cc" }}>SGST: <strong>{symbol}{formatAmount(sgst)}</strong></p>}
+                          {applyIGST && igst > 0 && <p style={{ margin: "2px 0", color: "#0066cc" }}>IGST: <strong>{symbol}{formatAmount(igst)}</strong></p>}
+                          <p style={{ margin: "2px 0" }}>Round Off: <strong>{symbol}{formatAmount(Math.round(total)-total)}</strong></p>
+                        </div>
+                        <div style={{ width: "50%", padding: "8px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-end" }}>
+                          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "bold" }}>Grand Total: {symbol}{formatAmount(total)}</h2>
+                        </div>
+                      </div>
+
+                      <div style={{ padding: "8px", border: "1px solid #000", borderTop: "none", background: "#fff", fontSize: "11px" }}>
+                        <p style={{ margin: 0 }}><strong>Amount in Words:</strong> {amountInWords}</p>
+                      </div>
+
+                      <div style={{ padding: "8px", border: "1px solid #000", borderTop: "none", background: "#fff", fontSize: "11px" }}>
+                       <p style={{ margin: 0 }}><strong>Remarks:</strong> {remarks || ""}</p>
+                      </div> 
+
+                      <div style={{ padding: "8px", border: "1px solid #000", borderTop: "none", background: "#fff", fontSize: "11px" }}>
+                        <p style={{ margin: "0 0 4px 0", textDecoration: "none", fontWeight: "bold" }}>Company's Bank Details</p>
+                        <table style={{ borderCollapse: "collapse", fontSize: "11px" }}>
                           <tbody>
-                            <tr style={{ fontWeight: 900, background: "#ffffff" }}>
-                              <td colSpan={3} style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "right", fontSize: "10px" }}>
-                                Total
-                              </td>
-                              <td style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "center", fontSize: "10px" }}>
-                                {lineItems.reduce((s, i) => s + i.invoicedQty, 0)} {lineItems[0]?.uom || ""}
-                              </td>
-                              <td colSpan={3} style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "right", fontSize: "10px" }}>
-                              </td>
-                              <td style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "right", fontSize: "10px" }}>
-                                {symbol}{formatAmount(lineItems.reduce((s, i) => s + i.taxableValue, 0))}
-                              </td>
+                            <tr>
+                              <td style={{ padding: "0 8px 0 0", width: "110px" }}>Bank Name</td>
+                              <td style={{ padding: "0 4px" }}>:</td>
+                              <td style={{ fontWeight: "normal" }}>{bankDetails.bankName}</td>
+                            </tr>
+                            <tr>
+                              <td style={{ padding: "0 8px 0 0" }}>A/c No.</td>
+                              <td style={{ padding: "0 4px" }}>:</td>
+                              <td style={{ fontWeight: "normal" }}>{bankDetails.accountNo}</td>
+                            </tr>
+                            <tr>
+                              <td style={{ padding: "0 8px 0 0" }}>IFSC Code</td>
+                              <td style={{ padding: "0 4px" }}>:</td>
+                              <td style={{ fontWeight: "normal" }}>{bankDetails.ifscCode}</td>
+                            </tr>
+                            <tr>
+                              <td style={{ padding: "0 8px 0 0" }}>Bank Branch</td>
+                              <td style={{ padding: "0 4px" }}>:</td>
+                              <td style={{ fontWeight: "normal" }}>{bankDetails.branch}</td>
                             </tr>
                           </tbody>
                         </table>
                       </div>
 
-                      {/* TAX BREAKUP TABLE (HSN/SAC वाइज) */}
-                      <div style={{ borderTop: "2px solid #000", background: "#ffffff", flexShrink: 0 }}>
-                        <div style={{ padding: "4px 8px", fontSize: "9px", display: "flex", justifyContent: "space-between" }}>
-                          <div>
-                            <span>Amount Chargeable (in words)</span><br />
-                            <strong style={{ fontWeight: 900 }}>INR {amountInWords} Only</strong>
-                          </div>
-                          <div style={{ textAlign: "right", fontStyle: "italic", fontSize: "8px", color: "#666" }}>
-                            E. & O.E
-                          </div>
-                        </div>
+                      <div style={{ padding: "8px", border: "1px solid #000", borderTop: "none", background: "#fff", fontSize: "11px", minHeight: "120px", position: "relative" }}>
+                        <br />
+                        <p style={{ margin: 0 }}><strong>TERM & CONDITION OF SALES:</strong> 
+                        <br />
+                        {terms || ""}</p>
+                        
 
-                        <div style={{ borderTop: "1px solid #000" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8px", background: "#ffffff" }}>
-                            <thead style={{ borderBottom: "1px solid #000" }}>
-                              <tr>
-                                <th rowSpan={2} style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "left", width: "40%", fontWeight: 900 }}>HSN/SAC</th>
-                                <th rowSpan={2} style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right", width: "15%", fontWeight: 900 }}>Taxable Value</th>
-                                {applyCGST && <th colSpan={2} style={{ borderRight: "1px solid #000", borderBottom: '1px solid #000', padding: "4px", textAlign: "center", fontWeight: 900 }}>Central Tax</th>}
-                                {applySGST && <th colSpan={2} style={{ borderRight: "1px solid #000", borderBottom: '1px solid #000', padding: "4px", textAlign: "center", fontWeight: 900 }}>State Tax</th>}
-                                {applyIGST && <th colSpan={2} style={{ borderRight: "1px solid #000", borderBottom: '1px solid #000', padding: "4px", textAlign: "center", fontWeight: 900 }}>Integrated Tax</th>}
-                                <th rowSpan={2} style={{ padding: "4px", textAlign: "right", width: "15%", fontWeight: 900 }}>Total Tax Amount</th>
-                              </tr>
-                              <tr>
-                                {applyCGST && <><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "center" }}>Rate</th><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "right" }}>Amount</th></>}
-                                {applySGST && <><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "center" }}>Rate</th><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "right" }}>Amount</th></>}
-                                {applyIGST && <><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "center" }}>Rate</th><th style={{ borderRight: "1px solid #000", padding: "2px", textAlign: "right" }}>Amount</th></>}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {lineItems.map((item, i) => {
-                                const itemTaxTotal = (applyCGST ? item.cgstAmount : 0) + (applySGST ? item.sgstAmount : 0) + (applyIGST ? item.igstAmount : 0);
-                                if (itemTaxTotal === 0) return null;
-                                return (
-                                  <tr key={i}>
-                                    <td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "left" }}>{item.hsnCode || "-"}</td>
-                                    <td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.taxableValue)}</td>
-                                    {applyCGST && <><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "center" }}>{item.cgstPercent.toFixed(1)}%</td><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.cgstAmount)}</td></>}
-                                    {applySGST && <><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "center" }}>{item.sgstPercent.toFixed(1)}%</td><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.sgstAmount)}</td></>}
-                                    {applyIGST && <><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "center" }}>{item.igstPercent.toFixed(1)}%</td><td style={{ borderRight: "1px solid #000", padding: "2px 4px", textAlign: "right" }}>{formatAmount(item.igstAmount)}</td></>}
-                                    <td style={{ padding: "2px 4px", textAlign: "right" }}>{formatAmount(itemTaxTotal)}</td>
-                                  </tr>
-                                );
-                              })}
-                              <tr style={{ borderTop: "1px solid #000", fontWeight: 900 }}>
-                                <td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>Total</td>
-                                <td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(taxable)}</td>
-                                {applyCGST && <><td style={{ borderRight: "1px solid #000", padding: "4px" }}></td><td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(cgst)}</td></>}
-                                {applySGST && <><td style={{ borderRight: "1px solid #000", padding: "4px" }}></td><td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(sgst)}</td></>}
-                                {applyIGST && <><td style={{ borderRight: "1px solid #000", padding: "4px" }}></td><td style={{ borderRight: "1px solid #000", padding: "4px", textAlign: "right" }}>{formatAmount(igst)}</td></>}
-                                <td style={{ padding: "4px", textAlign: "right" }}>{formatAmount((applyCGST ? cgst : 0) + (applySGST ? sgst : 0) + (applyIGST ? igst : 0))}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
-                      {/* TAX AMOUNT IN WORDS */}
-                      <div style={{ borderTop: "1px solid #000", padding: "4px 8px", fontSize: "9px" }}>
-                        <span style={{ fontSize: "8px" }}>Tax Amount (in digits) :</span><br />
-                        <strong style={{ fontWeight: 900 }}>INR {formatAmount((applyCGST ? cgst : 0) + (applySGST ? sgst : 0) + (applyIGST ? igst : 0))}</strong>
-                      </div>
-
-                      {/* BOTTOM PAN, BANK, SIGNATURE */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: "1px solid #000", background: "#ffffff", flexShrink: 0 }}>
-                        <div style={{ borderRight: "1px solid #000", padding: "6px 8px", fontSize: "9px" }}>
-                          <p style={{ margin: "0 0 4px 0" }}>
-                            Company's PAN: <strong style={{ fontWeight: 900 }}>{selectedOrder?.companyPAN || "AAACF3485R"}</strong>
-                          </p>
-                          <div style={{ marginTop: "10px" }}>
-                            <p style={{ margin: "0 0 2px 0", textDecoration: "underline", fontWeight: 700 }}>Declaration</p>
-                            <p style={{ margin: 0, lineHeight: 1.4, fontStyle: "italic", fontSize: "8px" }}>
-                              We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
-                            </p>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", fontSize: "9px" }}>
-                          <div style={{ padding: "6px 8px", borderBottom: "1px solid #000", flex: 1 }}>
-                            <p style={{ margin: "0 0 2px 0", textDecoration: "underline", fontWeight: 700 }}>Company's Bank Details</p>
-                            <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: "2px", fontWeight: 600 }}>
-                              <div>Bank Name</div><div>: <strong>HDFC Bank Ltd</strong></div>
-                              <div>A/c No.</div><div>: <strong>50200021300057</strong></div>
-                              <div>Branch & IFS Code</div><div>: <strong>Mettukuppam & HDFC0001000</strong></div>
-                            </div>
-                          </div>
-                          <div style={{ padding: "6px 8px", textAlign: "right", display: "flex", flexDirection: "column", justifyContent: "space-between", height: "80px" }}>
-                            <p style={{ margin: 0, fontWeight: 900 }}>for Fluoro Automation Seals Pvt Ltd</p>
-                            <div style={{ marginTop: "auto" }}>
-                              <p style={{ margin: 0, fontWeight: 700, fontSize: "8px" }}>Authorised Signatory</p>
-                            </div>
-                          </div>
+                        <div style={{ position: "absolute", bottom: "10px", right: "10px", textAlign: "right" }}>
+                          <p style={{ margin: "0", fontWeight: "bold" }}>For Fluoro Automation Seals Pvt Ltd</p>
+                          <br />
+                          <br />
+                          <p style={{ margin: "0", fontWeight: "bold", textDecoration: "overline", display: "inline-block", paddingTop: "5px" }}>Authorized Signatory</p>
                         </div>
                       </div>
                     </>
